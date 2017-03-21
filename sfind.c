@@ -1,6 +1,10 @@
+#include <unistd.h>
 
+int main(int argc, char **argv){
+if (argc == 2){
+	execlp("ls","ls",argv[1],NULL);
+}
 
-int main(){
 
 return 0;
 }
