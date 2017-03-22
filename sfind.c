@@ -12,3 +12,6 @@ int main(int argc, char **argv){
 //opendir
 //rewinddir??
 //sisdir
+
+
+//implementar exec no fim
