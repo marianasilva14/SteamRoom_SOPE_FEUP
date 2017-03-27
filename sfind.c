@@ -2,21 +2,44 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdio.h>
+#include <dirent.h>
 
 
 int main(int argc, char **argv){
+
+if (argc < 2){
+	printf("This program requires at least 1 argument (directory), example ./sfind / \n");
+}
+DIR *directory;
+directory = opendir(argv[1]);
+struct dirent *dire;
 struct stat s;
-const char *pathname = "/";
-stat(pathname,&s);
-if (S_ISDIR(s.st_mode)){
-printf("Directory\n");
+while((dire = readdir(directory)) != NULL){
+	printf("%s->",(*dire).d_name);
+	stat((*dire).d_name,&s);
+	switch(s.st_mode & S_IFMT){
+	case(S_IFREG):
+		printf("Regular file; ");
+		break;
+	case (S_IFDIR):
+		printf("Directory; ");
+		char *dirName = (*dire).d_name;
+		if (dirName[0] == '.'){
+			if (dirName[1] == '\0' || dirName[1] == '.'){
+				break;			
+			}		
+		}
+		pid_t ppid = getpid();
+		if (fork() == 0) //filho
+		{
+		printf("I am process %d, my parent is %d \n",getpid(),ppid);
+		execlp("./sfind","./sfind",dirName,NULL);
+		printf("EXEC FAILED! ABORT!\n");		
+		}
+		break;
+	}
 }
-
-if (argc == 2){
-	execlp("ls","ls",argv[1],NULL);
-}
-
-
+printf("\n");
 
   return 0;
 }
