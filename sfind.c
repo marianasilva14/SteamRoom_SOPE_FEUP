@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <dirent.h>
 
-
 int main(int argc, char **argv){
 
 if (argc < 2){
@@ -19,10 +18,10 @@ while((dire = readdir(directory)) != NULL){
 	stat((*dire).d_name,&s);
 	switch(s.st_mode & S_IFMT){
 	case(S_IFREG):
-		printf("Regular file; ");
+		printf("Regular file;\n ");
 		break;
 	case (S_IFDIR):
-		printf("Directory; ");
+		printf("Directory;\n ");
 		char *dirName = (*dire).d_name;
 		if (dirName[0] == '.'){
 			if (dirName[1] == '\0' || dirName[1] == '.'){
@@ -32,7 +31,7 @@ while((dire = readdir(directory)) != NULL){
 		pid_t ppid = getpid();
 		if (fork() == 0) //filho
 		{
-		printf("I am process %d, my parent is %d \n",getpid(),ppid);
+		printf("\n\nI am process %d, my parent is %d, Opening %s\n ",getpid(),ppid,dirName);
 		execlp("./sfind","./sfind",dirName,NULL);
 		printf("EXEC FAILED! ABORT!\n");		
 		}
@@ -40,6 +39,11 @@ while((dire = readdir(directory)) != NULL){
 	}
 }
 printf("\n");
-
-  return 0;
+return 0;
 }
+
+//rewinddir??
+//sisdir
+
+
+//implementar exec no fim
