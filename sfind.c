@@ -59,9 +59,13 @@ int main(int argc, char **argv){
 	if( getcwd(cwd,sizeof(cwd)) == NULL){
 		perror("Error reading cwd\n");
 	}
+	else{
+		printf("Current Working Dir:%s\n",cwd);
+	}
+
 	while((file = readdir(directory)) != NULL){
 		char *fileName = (*file).d_name;
-		printf("Current file name: %s\n",fileName);
+		//printf("Current file name: %s\n",fileName);
 		if (stat(fileName,&file_info)==-1){
 			printf("Failed to open directory %s\n", argv[1]);
 			perror("stat");
@@ -73,7 +77,6 @@ int main(int argc, char **argv){
 			}
 			printf("Directory:%s\n",fileName);
 			strcpy(dirsFound[dirsIterator++],fileName);
-			break;
 		}
 		else if (S_ISREG(file_info.st_mode)){
 			printf("Regular file:%s\n",fileName);
@@ -91,7 +94,7 @@ closedir(directory);
 			strcat(nextDirPath,"/");
 			strcat(nextDirPath,dirName);
 			printf("Next dir path:%s",nextDirPath);
-			execlp("lsfind","lsfind",nextDirPath,NULL);
+			execlp("sfind","sfind",nextDirPath,NULL);
 			perror("execlp");
 			printf("EXEC FAILED! ABORT!\n");
 			}
