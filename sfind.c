@@ -34,7 +34,7 @@ void sigint_handler(int signo)
 }
 
 int main(int argc, char **argv){
-
+	// first argument should always be the directory to initialize the search
 	if (signal(SIGINT,sigint_handler) < 0)
 	{
 		fprintf(stderr,"Unable to install SIGINT handler\n");
@@ -45,7 +45,10 @@ int main(int argc, char **argv){
 		printf("This program requires at least 1 argument (directory), example ./sfind / \n");
 	}
 	DIR *directory;
-	chdir(argv[1]);
+	if(argv[1][0] != '-'){
+		chdir(argv[1]);
+	}
+	
 	if ((directory = opendir(".")) == NULL){
 		perror("Error Reading Dir\n");
 	}
