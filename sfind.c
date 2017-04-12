@@ -125,7 +125,7 @@ int createChilds(char **dirsFound, int numberOfDirectories){
 		if (getpid() == parentpid){
 			if (fork() == 0) //filho
 			{
-				signal(getpid(), &sigint_child_handler);
+				signal(SIGINT, &sigint_child_handler);
 				printf("I am process %d, my parent is %d, Opening %s\n",getpid(),getppid(),dirName);
 				char *nextDirPath = cwd;
 				strcat(nextDirPath,"/");
