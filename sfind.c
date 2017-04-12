@@ -45,7 +45,7 @@ static void sigint_handler(int signo)
 		case 'N':
 			line = "Process continue!\n";
 			write(STDOUT_FILENO,line,strlen(line));
-			killpg(precessGroup_pid, SIGINT);
+			killpg(precessGroup_pid, SIGCONT);
 		break;
 		default:
 			exit(3);
@@ -118,8 +118,11 @@ int createChild(const char* fileName){
 		exit(0);
 	}
 	else if (pid > 0){ //parent
+		void (*oldhandler)(int);
+		oldhandler = signal(SIGCONT, SIG_IGN);
 		int status;
 		wait(&status);
+		signal(SIGCONT, oldhandler);
 		printf("%d: Child %d terminated\n",getpid(),pid);
 	}
 	else{ //error
