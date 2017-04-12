@@ -10,6 +10,9 @@
 #include <ctype.h>
 #include <signal.h>
 
+int createChilds(char **dirsFound,int numberOfDirectories);
+
+
 //handler CRTL-C
 static void sigint_child_handler(int signo)
 {
@@ -60,7 +63,10 @@ int setHandlerSIGINT(){
 	return 0;
 }
 
-int readDirInfo(char* actualDir){
+
+
+
+int findFiles(char* actualDir){
 	chdir(actualDir);
 	DIR *directory;
 	if ((directory = opendir(".")) == NULL){
@@ -69,16 +75,11 @@ int readDirInfo(char* actualDir){
 	/*Start sfind*/
 	struct dirent *file;
 	struct stat file_info;
-	pid_t parentpid = getpid();
-	char cwd[1024];
-	if( getcwd(cwd,sizeof(cwd)) == NULL){
-		perror("Error reading cwd\n");
-	}
-	else{
-		printf("Current Working Dir:%s\n",cwd);
-	}
 
-	char dirsFound[100][1024]; //Space for 99dirs 1023 bytes long each
+
+
+
+	char *dirsFound[100]; //Space for 99dirs 1023 bytes long each
 	int dirsIterator = 0;
 
 	while((file = readdir(directory)) != NULL){
@@ -94,6 +95,7 @@ int readDirInfo(char* actualDir){
 				continue;
 			}
 			printf("Directory:%s\n",fileName);
+			dirsFound[dirsIterator]=malloc(sizeof(fileName));
 			strcpy(dirsFound[dirsIterator++],fileName);
 		}
 		else if (S_ISREG(file_info.st_mode)){
@@ -101,9 +103,22 @@ int readDirInfo(char* actualDir){
 		}
 	}//close while
 	closedir(directory);
+	return createChilds(dirsFound,dirsIterator);
 
+}
+
+
+int createChilds(char **dirsFound,int numberOfDirectories){
+	char cwd[1024];
+	if( getcwd(cwd,sizeof(cwd)) == NULL){
+		perror("Error reading cwd\n");
+	}
+	else{
+		printf("Current Working Dir:%s\n",cwd);
+	}
+	pid_t parentpid = getpid();
 	int i;
-	for (i = 0; i < dirsIterator;i++){
+	for (i = 0; i < numberOfDirectories;i++){
 		char *dirName = dirsFound[i];
 		if (getpid() == parentpid){
 			if (fork() == 0) //filho
@@ -114,8 +129,9 @@ int readDirInfo(char* actualDir){
 				strcat(nextDirPath,"/");
 				strcat(nextDirPath,dirName);
 				printf("Next dir path:%s\n",nextDirPath);
-				if(readDirInfo(nextDirPath))
-				return 1;
+				if(findFiles(nextDirPath)){
+					return 1;
+				}
 			}
 			else{
 				int status;
@@ -127,6 +143,7 @@ int readDirInfo(char* actualDir){
 	}
 	return 0;
 }
+
 
 int main(int argc, char **argv){
 	/*Add SIGINT Handler*/
@@ -141,8 +158,8 @@ int main(int argc, char **argv){
 		}
 	}
 
-	if(readDirInfo(actualDir))
-	return 1;
+	if(findFiles(actualDir))
+		return 1;
 
 	return 0;
 }
