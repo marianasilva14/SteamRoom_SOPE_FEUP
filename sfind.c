@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <stdio.h>
 #include <dirent.h>
 #include <signal.h>
@@ -8,7 +9,7 @@
 #include <string.h>
 
 //handler CRTL-C
-void sigint_handler(int signo)
+static void sigint_handler(int signo)
 {
 	printf("In SIGINT handler ...\n");
 	printf("Are you sure you want to terminate (Y/N)?");
@@ -20,15 +21,18 @@ void sigint_handler(int signo)
 	{
 	case 'y':
 		printf("Process terminated!\n");
-		exit(0);
+		exit(2);
 	case 'Y':
 		printf("Process terminated!\n");
-		exit(0);
+		exit(2);
 	case 'n':
 		printf("Process continue!\n");
 		break;
 	case 'N':
 		printf("Process continue!\n");
+		break;
+	default:
+		exit(3);
 		break;
 	}
 }
@@ -37,18 +41,16 @@ int main(int argc, char **argv){
 	// first argument should always be the directory to initialize the search
 	if (signal(SIGINT,sigint_handler) < 0)
 	{
-		fprintf(stderr,"Unable to install SIGINT handler\n");
+		perror("Unable to install SIGINT handler\n");
 		exit(1);
 	}
-
-	if (argc < 2){
-		printf("This program requires at least 1 argument (directory), example ./sfind / \n");
-	}
 	DIR *directory;
-	if(argv[1][0] != '-'){
-		chdir(argv[1]);
+	if (argc > 1){
+		if(argv[1][0] != '-'){
+			chdir(argv[1]);
+		}
 	}
-	
+
 	if ((directory = opendir(".")) == NULL){
 		perror("Error Reading Dir\n");
 	}
@@ -97,9 +99,15 @@ closedir(directory);
 			strcat(nextDirPath,"/");
 			strcat(nextDirPath,dirName);
 			printf("Next dir path:%s",nextDirPath);
+			sleep(1);
 			execlp("sfind","sfind",nextDirPath,NULL);
-			perror("execlp");
-			printf("EXEC FAILED! ABORT!\n");
+			perror("EXEC FAILED! ABORT!\n");
+			}
+			else{
+				int status;
+				pid_t pid;
+				pid = wait(&status);
+				printf("Child %d terminated\n",pid);
 			}
 		}
 	}
