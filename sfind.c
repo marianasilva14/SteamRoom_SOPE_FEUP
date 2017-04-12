@@ -35,7 +35,7 @@ static void sigint_handler(int signo)
 }
 
 int main(int argc, char **argv){
-
+	/*Add SIGINT Handler*/
 	struct sigaction actionINT;
 	actionINT.sa_handler = sigint_handler;
 	sigemptyset(&actionINT.sa_mask);
@@ -45,17 +45,17 @@ int main(int argc, char **argv){
 		perror("Unable to install SIGINT handler\n");
 		exit(1);
 	}
-
+	/*Change dir*/
 	DIR *directory;
 	if (argc > 1){
 		if(argv[1][0] != '-'){
 			chdir(argv[1]);
 		}
 	}
-
 	if ((directory = opendir(".")) == NULL){
 		perror("Error Reading Dir\n");
 	}
+	/*Start sfind*/
 	struct dirent *file;
 	struct stat file_info;
 	char dirsFound[100][1024]; //Space for 99dirs 1023 bytes long each
