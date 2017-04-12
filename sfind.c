@@ -108,11 +108,12 @@ int readDirInfo(char* actualDir){
 		if (getpid() == parentpid){
 			if (fork() == 0) //filho
 			{
-			printf("\n\nI am process %d, my parent is %d, Opening %s\n ",getpid(),getppid(),dirName);
+				signal(getpid(), &sigint_child_handler);
+			printf("I am process %d, my parent is %d, Opening %s\n ",getpid(),getppid(),dirName);
 			char *nextDirPath = cwd;
 			strcat(nextDirPath,"/");
 			strcat(nextDirPath,dirName);
-			printf("Next dir path:%s",nextDirPath);
+			printf("Next dir path:%s\n",nextDirPath);
 			if(readDirInfo(nextDirPath))
 				return 1;
 			}
@@ -124,11 +125,12 @@ int readDirInfo(char* actualDir){
 			}
 		}
 	}
+	return 0;
 }
 
 int main(int argc, char **argv){
 	/*Add SIGINT Handler*/
-	if(setHandlerSIGINT)
+	if(setHandlerSIGINT())
 		exit(1);
 
 	char *actualDir;
