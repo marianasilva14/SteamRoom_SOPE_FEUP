@@ -10,14 +10,15 @@
 #include <ctype.h>
 #include <signal.h>
 
-int createChilds(char **dirsFound,int numberOfDirectories);
+//PROTOS
+int createChild(const char* fileName);
 
 //handler CRTL-C
 static void sigint_child_handler(int signo)
 {
 	sigset_t newmask, oldmask;
 	sigemptyset(&newmask);
-	sigaddset(&newmask, SIGCONT);
+	sigaddset(&newmask, SIGINT);
 	sigprocmask(SIG_BLOCK, &newmask, &oldmask);
 	sigsuspend(&oldmask);
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
@@ -26,8 +27,10 @@ static void sigint_child_handler(int signo)
 //handler CRTL-C
 static void sigint_handler(int signo)
 {
-	printf("In SIGINT handler ...\n");
-	printf("Are you sure you want to terminate (Y/N)?\n");
+	char* line = "In SIGINT handler ...\n";
+	write(STDOUT_FILENO,line,strlen(line));
+	line = "Are you sure you want to terminate (Y/N)?\n";
+	write(STDOUT_FILENO,line,strlen(line));
 	char input;
 	scanf("%s", &input);
 	input = toupper(input);
@@ -35,12 +38,14 @@ static void sigint_handler(int signo)
 	switch(input)
 	{
 		case 'Y':
-			printf("Process terminated!\n");
+			line = "Process terminated!\n";
+			write(STDOUT_FILENO,line,strlen(line));
 			killpg(precessGroup_pid, SIGKILL);
 		break;
 		case 'N':
-			printf("Process continue!\n");
-			killpg(precessGroup_pid, SIGCONT);
+			line = "Process continue!\n";
+			write(STDOUT_FILENO,line,strlen(line));
+			killpg(precessGroup_pid, SIGINT);
 		break;
 		default:
 			exit(3);
@@ -48,7 +53,82 @@ static void sigint_handler(int signo)
 	}
 }
 
-int setHandlerSIGINT(){
+int readDirInfo(const char* actualDir){
+	chdir(actualDir);
+	DIR *directory;
+	if ((directory = opendir(".")) == NULL){
+		perror("Error Reading Dir\n");
+	}
+
+	struct dirent *file;
+	struct stat file_info;
+	while((file = readdir(directory)) != NULL){
+		char *fileName = (*file).d_name;
+		//printf("Current file name: %s\n",fileName);
+		if (stat(fileName,&file_info)==-1){
+			printf("%d: Failed to open directory %s\n", getpid(),fileName);
+			perror("stat");
+			return 1;
+		}
+		if (S_ISDIR(file_info.st_mode)){
+			if (fileName[0] == '.' && (fileName[1] == '\0' || fileName[1] == '.')){
+				continue;
+			}
+			printf("%d: Directory:%s\n",getpid(), fileName);
+			createChild(fileName);
+			char* line = "waiting for childs...\n";
+			printf("%d: %s",getpid(), line);
+			//write(STDOUT_FILENO, line, strlen(line));
+		}
+		else if (S_ISREG(file_info.st_mode)){
+			printf("%d: Regular file:%s\n",getpid(),fileName);
+		}
+	}
+	closedir(directory);
+	return 0;
+}
+
+char* getNextDir(const char* fileName){
+	char cwd[1024];
+	if(getcwd(cwd,sizeof(cwd)) == NULL){
+		perror("Error reading cwd\n");
+	}
+	else{
+		//printf("Current Working Dir:%s\n",cwd);
+	}
+	char* nextDirPath = cwd;
+	strcat(nextDirPath,"/");
+	strcat(nextDirPath,fileName);
+	char* line = "Next dir path:";
+	write(STDOUT_FILENO,line,strlen(line));
+	write(STDOUT_FILENO,nextDirPath,strlen(nextDirPath));
+	write(STDOUT_FILENO,"\n",1);
+	return nextDirPath;
+}
+
+int createChild(const char* fileName){
+	char *nextDirPath = getNextDir(fileName);
+	pid_t pid = fork();
+	if (pid == 0) //filho
+	{
+		signal(SIGINT, &sigint_child_handler);
+		printf("%d: my parent is %d, Opening %s\n",getpid(),getppid(),fileName);
+		int tries = 0;
+		readDirInfo(fileName);
+		exit(0);
+	}
+	else if (pid > 0){ //parent
+		int status;
+		wait(&status);
+		printf("%d: Child %d terminated\n",getpid(),pid);
+	}
+	else{ //error
+		return 1;
+	}
+	return 0;
+}
+
+int main(int argc, char **argv){
 	/*Add SIGINT Handler*/
 	struct sigaction actionINT;
 	actionINT.sa_handler = sigint_handler;
@@ -59,100 +139,8 @@ int setHandlerSIGINT(){
 		perror("Unable to install SIGINT handler\n");
 		return 1;
 	}
-	return 0;
-}
 
-int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator, int* len){
-	struct dirent *file;
-	struct stat file_info;
-
-	while((file = readdir(directory)) != NULL){
-		char *fileName = (*file).d_name;
-		//printf("Current file name: %s\n",fileName);
-		if (stat(fileName,&file_info)==-1){
-			printf("Failed to open directory %s\n", fileName);
-			perror("stat");
-			return 1;
-		}
-		if (S_ISDIR(file_info.st_mode)){
-			if (fileName[0] == '.' && (fileName[1] == '\0' || fileName[1] == '.')){
-				continue;
-			}
-			printf("Directory:%s\n",fileName);
-			if ((*dirsIterator) >= (*len)){
-				dirsFound = realloc(dirsFound,2 * (*len) * sizeof(*dirsFound));
-				(*len) = (*len) * 2;
-			}
-			dirsFound[(*dirsIterator)] = malloc(sizeof(fileName));
-			strcpy(dirsFound[(*dirsIterator)++],fileName);
-		}
-		else if (S_ISREG(file_info.st_mode)){
-			printf("Regular file:%s\n",fileName);
-		}
-	}
-	return 0;
-}
-
-int findFiles(char* actualDir){
-	chdir(actualDir);
-	DIR *directory;
-	if ((directory = opendir(".")) == NULL){
-		perror("Error Reading Dir\n");
-	}
-
-	int arrayLength = 100;
-	char** dirsFound = malloc(arrayLength * sizeof(*dirsFound));
-	int dirsIterator = 0;
-
-	if(readDirInfo(directory, dirsFound, &dirsIterator, &arrayLength))
-		return 1;
-	closedir(directory);
-	return createChilds(dirsFound,dirsIterator);
-}
-
-int createChilds(char **dirsFound, int numberOfDirectories){
-	char cwd[1024];
-	if( getcwd(cwd,sizeof(cwd)) == NULL){
-		perror("Error reading cwd\n");
-	}
-	else{
-		printf("Current Working Dir:%s\n",cwd);
-	}
-	pid_t parentpid = getpid();
-	int i;
-	for (i = 0; i < numberOfDirectories;i++){
-		char *dirName = dirsFound[i];
-		if (getpid() == parentpid){
-			if (fork() == 0) //filho
-			{
-				signal(getpid(), &sigint_child_handler);
-				printf("I am process %d, my parent is %d, Opening %s\n",getpid(),getppid(),dirName);
-				char *nextDirPath = cwd;
-				strcat(nextDirPath,"/");
-				strcat(nextDirPath,dirName);
-				printf("Next dir path:%s\n",nextDirPath);
-				if(findFiles(nextDirPath)){
-					return 1;
-				}
-			}
-			else{
-				int status;
-				pid_t pid;
-				pid = wait(&status);
-				//printf("Child %d terminated\n",pid);
-			}
-		}
-	}
-	return 0;
-}
-
-
-int main(int argc, char **argv){
-	/*Add SIGINT Handler*/
-	if(setHandlerSIGINT())
-	exit(1);
-
-	char *actualDir;
+	char* actualDir;
 	/*Change dir*/
 	if (argc > 1){
 		if(argv[1][0] != '-'){
@@ -160,6 +148,6 @@ int main(int argc, char **argv){
 		}
 	}
 
-	return findFiles(actualDir);
+	return createChild(actualDir);
 
 }
