@@ -18,10 +18,16 @@ static void sigint_child_handler(int signo)
 {
 	sigset_t newmask, oldmask;
 	sigemptyset(&newmask);
-	sigaddset(&newmask, SIGINT);
+	sigaddset(&newmask, SIGUSR1);
 	sigprocmask(SIG_BLOCK, &newmask, &oldmask);
 	sigsuspend(&oldmask);
 	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+}
+
+static void sigusr_handler(int signo)
+{
+	char* line = "Process continue!\n";
+	write(STDOUT_FILENO,line,strlen(line));
 }
 
 //handler CRTL-C
@@ -45,10 +51,7 @@ static void sigint_handler(int signo)
 		case 'N':
 			line = "Process continue!\n";
 			write(STDOUT_FILENO,line,strlen(line));
-			killpg(precessGroup_pid, SIGCONT);
-		break;
-		default:
-			exit(3);
+			killpg(precessGroup_pid, SIGUSR1);
 		break;
 	}
 }
@@ -76,9 +79,6 @@ int readDirInfo(const char* actualDir){
 			}
 			printf("%d: Directory:%s\n",getpid(), fileName);
 			createChild(fileName);
-			char* line = "waiting for childs...\n";
-			printf("%d: %s",getpid(), line);
-			//write(STDOUT_FILENO, line, strlen(line));
 		}
 		else if (S_ISREG(file_info.st_mode)){
 			printf("%d: Regular file:%s\n",getpid(),fileName);
@@ -87,6 +87,7 @@ int readDirInfo(const char* actualDir){
 	closedir(directory);
 	return 0;
 }
+
 
 char* getNextDir(const char* fileName){
 	char cwd[1024];
@@ -111,19 +112,14 @@ int createChild(const char* fileName){
 	pid_t pid = fork();
 	if (pid == 0) //filho
 	{
-		signal(SIGINT, &sigint_child_handler);
 		printf("%d: my parent is %d, Opening %s\n",getpid(),getppid(),fileName);
-		int tries = 0;
 		readDirInfo(fileName);
 		exit(0);
 	}
 	else if (pid > 0){ //parent
-		void (*oldhandler)(int);
-		oldhandler = signal(SIGCONT, SIG_IGN);
 		int status;
 		wait(&status);
-		signal(SIGCONT, oldhandler);
-		printf("%d: Child %d terminated\n",getpid(),pid);
+		//printf("%d: Child %d terminated\n",getpid(),pid);
 	}
 	else{ //error
 		return 1;
@@ -142,6 +138,8 @@ int main(int argc, char **argv){
 		perror("Unable to install SIGINT handler\n");
 		return 1;
 	}
+	void (*oldhandler)(int);
+ 	oldhandler = signal(SIGUSR1, SIG_IGN);
 
 	char* actualDir;
 	/*Change dir*/
@@ -151,6 +149,18 @@ int main(int argc, char **argv){
 		}
 	}
 
-	return createChild(actualDir);
+	pid_t pid = fork();
+	if (pid == 0) //filho
+	{
+		signal(SIGINT, &sigint_child_handler);
+		signal(SIGUSR1, &sigusr_handler);
+		readDirInfo(actualDir);
+		exit(0);
+	}
+	else if (pid > 0){ //parent
+		int status;
+		while(wait(&status) != pid);
+	}
+	return 0;
 
 }
