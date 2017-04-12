@@ -65,22 +65,9 @@ int setHandlerSIGINT(){
 
 
 
-
-int findFiles(char* actualDir){
-	chdir(actualDir);
-	DIR *directory;
-	if ((directory = opendir(".")) == NULL){
-		perror("Error Reading Dir\n");
-	}
-	/*Start sfind*/
+int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator){
 	struct dirent *file;
 	struct stat file_info;
-
-
-
-
-	char *dirsFound[100]; //Space for 99dirs 1023 bytes long each
-	int dirsIterator = 0;
 
 	while((file = readdir(directory)) != NULL){
 		char *fileName = (*file).d_name;
@@ -95,13 +82,29 @@ int findFiles(char* actualDir){
 				continue;
 			}
 			printf("Directory:%s\n",fileName);
-			dirsFound[dirsIterator]=malloc(sizeof(fileName));
-			strcpy(dirsFound[dirsIterator++],fileName);
+
+			dirsFound[(*dirsIterator)] = malloc(sizeof(fileName));
+			strcpy(dirsFound[(*dirsIterator)++],fileName);
 		}
 		else if (S_ISREG(file_info.st_mode)){
 			printf("Regular file:%s\n",fileName);
 		}
-	}//close while
+	}
+	return 0;
+}
+
+int findFiles(char* actualDir){
+	chdir(actualDir);
+	DIR *directory;
+	if ((directory = opendir(".")) == NULL){
+		perror("Error Reading Dir\n");
+	}
+
+	char* dirsFound[100]; //Space for 99dirs 1023 bytes long each
+	int dirsIterator = 0;
+
+	if(readDirInfo(directory, dirsFound, &dirsIterator))
+		return 1;
 	closedir(directory);
 	return createChilds(dirsFound,dirsIterator);
 
@@ -132,6 +135,7 @@ int createChilds(char **dirsFound,int numberOfDirectories){
 				if(findFiles(nextDirPath)){
 					return 1;
 				}
+
 			}
 			else{
 				int status;
@@ -160,6 +164,7 @@ int main(int argc, char **argv){
 
 	if(findFiles(actualDir))
 		return 1;
+
 
 	return 0;
 }
