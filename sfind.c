@@ -11,6 +11,17 @@
 #include <signal.h>
 
 //handler CRTL-C
+static void sigint_child_handler(int signo)
+{
+	sigset_t newmask, oldmask;
+	sigemptyset(&newmask);
+	sigaddset(&newmask, SIGCONT);
+	sigprocmask(SIG_BLOCK, &newmask, &oldmask);
+	sigsuspend(&oldmask);
+	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+}
+
+//handler CRTL-C
 static void sigint_handler(int signo)
 {
 	printf("In SIGINT handler ...\n");
@@ -27,6 +38,7 @@ static void sigint_handler(int signo)
 		break;
 		case 'N':
 		printf("Process continue!\n");
+		killpg(getpgid(getpid()), SIGCONT);
 		break;
 		default:
 		exit(3);
@@ -55,8 +67,12 @@ int main(int argc, char **argv){
 	int dirsIterator = 0;
 	int i = 0;
 	do{
-		if (fork() == 0) //filho
+		pid_t pid = fork();
+		if (pid == 0) //chill
 		{
+			dirsIterator = 0;
+			i = 0;
+			signal(SIGINT, &sigint_child_handler);
 			printf("\n\nI am process %d, my parent is %d, Opening %s\n ",getpid(),getppid(),actualDir);
 			/*Start sfind*/
 			chdir(actualDir);
@@ -103,10 +119,10 @@ int main(int argc, char **argv){
 			printf("Next dir path:%s",nextDirPath);
 			actualDir = nextDirPath;
 		}
-		else{
+		else{ //parent
 			int status;
 			pid_t pid;
-			pid = wait(&status);
+			pid = waitpid(pid, &status, 0);
 			printf("Child %d terminated\n",pid);
 		}
 	}	while(i < dirsIterator);
