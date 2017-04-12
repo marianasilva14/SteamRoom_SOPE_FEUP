@@ -62,7 +62,7 @@ int setHandlerSIGINT(){
 	return 0;
 }
 
-int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator){
+int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator, int* len){
 	struct dirent *file;
 	struct stat file_info;
 
@@ -79,8 +79,9 @@ int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator){
 				continue;
 			}
 			printf("Directory:%s\n",fileName);
-			if ((*dirsIterator) >= 100){
-				dirsFound = realloc(dirsFound,200*(sizeof(char*)));
+			if ((*dirsIterator) >= (*len)){
+				dirsFound = realloc(dirsFound,2 * (*len) * sizeof(*dirsFound));
+				(*len) = (*len) * 2;
 			}
 			dirsFound[(*dirsIterator)] = malloc(sizeof(fileName));
 			strcpy(dirsFound[(*dirsIterator)++],fileName);
@@ -99,10 +100,11 @@ int findFiles(char* actualDir){
 		perror("Error Reading Dir\n");
 	}
 
-	char* dirsFound[100]; //Space for 99dirs 1023 bytes long each
+	int arrayLength = 100;
+	char** dirsFound = malloc(arrayLength * sizeof(*dirsFound));
 	int dirsIterator = 0;
 
-	if(readDirInfo(directory, dirsFound, &dirsIterator))
+	if(readDirInfo(directory, dirsFound, &dirsIterator, &arrayLength))
 		return 1;
 	closedir(directory);
 	return createChilds(dirsFound,dirsIterator);
@@ -135,7 +137,7 @@ int createChilds(char **dirsFound, int numberOfDirectories){
 			}
 			else{
 				int status;
-				pid_t pid
+				pid_t pid;
 				pid = wait(&status);
 				//printf("Child %d terminated\n",pid);
 			}
