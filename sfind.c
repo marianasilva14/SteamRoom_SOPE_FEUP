@@ -28,7 +28,7 @@ static void sigint_handler(int signo)
 		case 'N':
 		printf("Process continue!\n");
 		break;
-	default:
+		default:
 		exit(3);
 		break;
 	}
@@ -46,72 +46,69 @@ int main(int argc, char **argv){
 		exit(1);
 	}
 	/*Change dir*/
-	DIR *directory;
+	char* actualDir;
 	if (argc > 1){
 		if(argv[1][0] != '-'){
-			chdir(argv[1]);
+			actualDir = argv[1];
 		}
 	}
-	if ((directory = opendir(".")) == NULL){
-		perror("Error Reading Dir\n");
-	}
-	/*Start sfind*/
-	struct dirent *file;
-	struct stat file_info;
-	char dirsFound[100][1024]; //Space for 99dirs 1023 bytes long each
 	int dirsIterator = 0;
-	int i;
-	pid_t parentpid = getpid();
-	char cwd[1024];
-	if( getcwd(cwd,sizeof(cwd)) == NULL){
-		perror("Error reading cwd\n");
-	}
-	else{
-		printf("Current Working Dir:%s\n",cwd);
-	}
-
-	while((file = readdir(directory)) != NULL){
-		char *fileName = (*file).d_name;
-		//printf("Current file name: %s\n",fileName);
-		if (stat(fileName,&file_info)==-1){
-			printf("Failed to open directory %s\n", argv[1]);
-			perror("stat");
-			return 1;
-		}
-		if (S_ISDIR(file_info.st_mode)){
-			if (fileName[0] == '.' && (fileName[1] == '\0' || fileName[1] == '.')){
-				continue;
+	int i = 0;
+	do{
+		if (fork() == 0) //filho
+		{
+			printf("\n\nI am process %d, my parent is %d, Opening %s\n ",getpid(),getppid(),actualDir);
+			/*Start sfind*/
+			chdir(actualDir);
+			DIR *directory;
+			if ((directory = opendir(".")) == NULL){
+				perror("Error Reading Dir\n");
 			}
-			printf("Directory:%s\n",fileName);
-			strcpy(dirsFound[dirsIterator++],fileName);
-		}
-		else if (S_ISREG(file_info.st_mode)){
-			printf("Regular file:%s\n",fileName);
-		}
-	}//close while
-	closedir(directory);
+			struct dirent *file;
+			struct stat file_info;
+			char dirsFound[100][1024]; //Space for 99dirs 1023 bytes long each
+			pid_t parentpid = getpid();
+			char cwd[1024];
+			if( getcwd(cwd,sizeof(cwd)) == NULL){
+				perror("Error reading cwd\n");
+			}
+			else{
+				printf("Current Working Dir:%s\n",cwd);
+			}
 
-	for (i = 0; i < dirsIterator;i++){
-		char *dirName = dirsFound[i];
-		if (getpid() == parentpid){
-			if (fork() == 0) //filho
-			{
-			printf("\n\nI am process %d, my parent is %d, Opening %s\n ",getpid(),getppid(),dirName);
+			while((file = readdir(directory)) != NULL){
+				char *fileName = (*file).d_name;
+				//printf("Current file name: %s\n",fileName);
+				if (stat(fileName,&file_info)==-1){
+					printf("Failed to open directory %s\n", argv[1]);
+					perror("stat");
+					return 1;
+				}
+				if (S_ISDIR(file_info.st_mode)){
+					if (fileName[0] == '.' && (fileName[1] == '\0' || fileName[1] == '.')){
+						continue;
+					}
+					printf("Directory:%s\n",fileName);
+					strcpy(dirsFound[dirsIterator++],fileName);
+				}
+				else if (S_ISREG(file_info.st_mode)){
+					printf("Regular file:%s\n",fileName);
+				}
+			}//close while
+			closedir(directory);
+			char *dirName = dirsFound[i++];
 			char *nextDirPath = cwd;
 			strcat(nextDirPath,"/");
 			strcat(nextDirPath,dirName);
 			printf("Next dir path:%s",nextDirPath);
-			sleep(1);
-			execlp("sfind","sfind",nextDirPath,NULL);
-			perror("EXEC FAILED! ABORT!\n");
-			}
-			else{
-				int status;
-				pid_t pid;
-				pid = wait(&status);
-				printf("Child %d terminated\n",pid);
-			}
+			actualDir = nextDirPath;
 		}
-	}
+		else{
+			int status;
+			pid_t pid;
+			pid = wait(&status);
+			printf("Child %d terminated\n",pid);
+		}
+	}	while(i < dirsIterator);
 	return 0;
 }
