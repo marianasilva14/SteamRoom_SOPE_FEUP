@@ -84,6 +84,9 @@ int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator){
 			printf("Directory:%s\n",fileName);
 
 			dirsFound[(*dirsIterator)] = malloc(sizeof(fileName));
+			if (*dirsIterator >= 100){
+				dirsFound = realloc(dirsFound,2*(sizeof(dirsFound)));
+			}
 			strcpy(dirsFound[(*dirsIterator)++],fileName);
 		}
 		else if (S_ISREG(file_info.st_mode)){
@@ -135,7 +138,6 @@ int createChilds(char **dirsFound,int numberOfDirectories){
 				if(findFiles(nextDirPath)){
 					return 1;
 				}
-
 			}
 			else{
 				int status;
