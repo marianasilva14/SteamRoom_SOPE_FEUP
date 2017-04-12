@@ -79,8 +79,8 @@ int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator){
 				continue;
 			}
 			printf("Directory:%s\n",fileName);
-			if (*dirsIterator >= 100){
-				dirsFound = realloc(dirsFound,2*(sizeof(dirsFound)));
+			if ((*dirsIterator) >= 100){
+				dirsFound = realloc(dirsFound,200*(sizeof(char*)));
 			}
 			dirsFound[(*dirsIterator)] = malloc(sizeof(fileName));
 			strcpy(dirsFound[(*dirsIterator)++],fileName);
@@ -135,9 +135,9 @@ int createChilds(char **dirsFound, int numberOfDirectories){
 			}
 			else{
 				int status;
-				pid_t pid;
+				pid_t pid
 				pid = wait(&status);
-				printf("Child %d terminated\n",pid);
+				//printf("Child %d terminated\n",pid);
 			}
 		}
 	}
