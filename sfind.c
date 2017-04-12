@@ -60,27 +60,9 @@ int setHandlerSIGINT(){
 	return 0;
 }
 
-int readDirInfo(char* actualDir){
-	chdir(actualDir);
-	DIR *directory;
-	if ((directory = opendir(".")) == NULL){
-		perror("Error Reading Dir\n");
-	}
-	/*Start sfind*/
+int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator){
 	struct dirent *file;
 	struct stat file_info;
-	pid_t parentpid = getpid();
-	char cwd[1024];
-	if( getcwd(cwd,sizeof(cwd)) == NULL){
-		perror("Error reading cwd\n");
-	}
-	else{
-		printf("Current Working Dir:%s\n",cwd);
-	}
-
-	char dirsFound[100][1024]; //Space for 99dirs 1023 bytes long each
-	int dirsIterator = 0;
-
 	while((file = readdir(directory)) != NULL){
 		char *fileName = (*file).d_name;
 		//printf("Current file name: %s\n",fileName);
@@ -94,12 +76,37 @@ int readDirInfo(char* actualDir){
 				continue;
 			}
 			printf("Directory:%s\n",fileName);
-			strcpy(dirsFound[dirsIterator++],fileName);
+			dirsFound[(*dirsIterator)] = malloc(sizeof(fileName));
+			strcpy(dirsFound[(*dirsIterator)++],fileName);
 		}
 		else if (S_ISREG(file_info.st_mode)){
 			printf("Regular file:%s\n",fileName);
 		}
-	}//close while
+	}
+	return 0;
+}
+
+int findFiles(char* actualDir){
+	chdir(actualDir);
+	DIR *directory;
+	if ((directory = opendir(".")) == NULL){
+		perror("Error Reading Dir\n");
+	}
+	/*Start sfind*/
+	pid_t parentpid = getpid();
+	char cwd[1024];
+	if( getcwd(cwd,sizeof(cwd)) == NULL){
+		perror("Error reading cwd\n");
+	}
+	else{
+		printf("Current Working Dir:%s\n",cwd);
+	}
+
+	char* dirsFound[100]; //Space for 99dirs 1023 bytes long each
+	int dirsIterator = 0;
+
+	if(readDirInfo(directory, dirsFound, &dirsIterator))
+		return 1;
 	closedir(directory);
 
 	int i;
@@ -114,7 +121,7 @@ int readDirInfo(char* actualDir){
 				strcat(nextDirPath,"/");
 				strcat(nextDirPath,dirName);
 				printf("Next dir path:%s\n",nextDirPath);
-				if(readDirInfo(nextDirPath))
+				if(findFiles(nextDirPath))
 				return 1;
 			}
 			else{
@@ -141,7 +148,7 @@ int main(int argc, char **argv){
 		}
 	}
 
-	if(readDirInfo(actualDir))
+	if(findFiles(actualDir))
 	return 1;
 
 	return 0;
