@@ -7,6 +7,8 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <signal.h>
 
 //handler CRTL-C
 static void sigint_handler(int signo)
@@ -14,21 +16,16 @@ static void sigint_handler(int signo)
 	printf("In SIGINT handler ...\n");
 	printf("Are you sure you want to terminate (Y/N)?");
 	char input;
-
 	scanf("%s", &input);
+	input = toupper(input);
 
 	switch(input)
 	{
-	case 'y':
+		case 'Y':
 		printf("Process terminated!\n");
-		exit(2);
-	case 'Y':
-		printf("Process terminated!\n");
-		exit(2);
-	case 'n':
-		printf("Process continue!\n");
+		exit(0);
 		break;
-	case 'N':
+		case 'N':
 		printf("Process continue!\n");
 		break;
 	default:
@@ -38,8 +35,13 @@ static void sigint_handler(int signo)
 }
 
 int main(int argc, char **argv){
-	// first argument should always be the directory to initialize the search
-	if (signal(SIGINT,sigint_handler) < 0)
+
+	struct sigaction actionINT;
+	actionINT.sa_handler = sigint_handler;
+	sigemptyset(&actionINT.sa_mask);
+	actionINT.sa_flags = 0;
+
+	if (sigaction(SIGINT, &actionINT, NULL) < 0)
 	{
 		perror("Unable to install SIGINT handler\n");
 		exit(1);
@@ -87,7 +89,7 @@ int main(int argc, char **argv){
 			printf("Regular file:%s\n",fileName);
 		}
 	}//close while
-closedir(directory);
+	closedir(directory);
 
 	for (i = 0; i < dirsIterator;i++){
 		char *dirName = dirsFound[i];
