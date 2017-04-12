@@ -12,7 +12,6 @@
 
 int createChilds(char **dirsFound,int numberOfDirectories);
 
-
 //handler CRTL-C
 static void sigint_child_handler(int signo)
 {
@@ -36,15 +35,15 @@ static void sigint_handler(int signo)
 	switch(input)
 	{
 		case 'Y':
-		printf("Process terminated!\n");
-		killpg(precessGroup_pid, SIGKILL);
+			printf("Process terminated!\n");
+			killpg(precessGroup_pid, SIGKILL);
 		break;
 		case 'N':
-		printf("Process continue!\n");
-		killpg(precessGroup_pid, SIGCONT);
+			printf("Process continue!\n");
+			killpg(precessGroup_pid, SIGCONT);
 		break;
 		default:
-		exit(3);
+			exit(3);
 		break;
 	}
 }
@@ -63,8 +62,6 @@ int setHandlerSIGINT(){
 	return 0;
 }
 
-
-
 int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator){
 	struct dirent *file;
 	struct stat file_info;
@@ -82,11 +79,10 @@ int readDirInfo(DIR* directory, char** dirsFound, int* dirsIterator){
 				continue;
 			}
 			printf("Directory:%s\n",fileName);
-
-			dirsFound[(*dirsIterator)] = malloc(sizeof(fileName));
 			if (*dirsIterator >= 100){
 				dirsFound = realloc(dirsFound,2*(sizeof(dirsFound)));
 			}
+			dirsFound[(*dirsIterator)] = malloc(sizeof(fileName));
 			strcpy(dirsFound[(*dirsIterator)++],fileName);
 		}
 		else if (S_ISREG(file_info.st_mode)){
@@ -110,11 +106,9 @@ int findFiles(char* actualDir){
 		return 1;
 	closedir(directory);
 	return createChilds(dirsFound,dirsIterator);
-
 }
 
-
-int createChilds(char **dirsFound,int numberOfDirectories){
+int createChilds(char **dirsFound, int numberOfDirectories){
 	char cwd[1024];
 	if( getcwd(cwd,sizeof(cwd)) == NULL){
 		perror("Error reading cwd\n");
@@ -164,9 +158,6 @@ int main(int argc, char **argv){
 		}
 	}
 
-	if(findFiles(actualDir))
-		return 1;
+	return findFiles(actualDir);
 
-
-	return 0;
 }
