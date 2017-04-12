@@ -40,12 +40,12 @@ int main(int argc, char **argv){
 	actionINT.sa_handler = sigint_handler;
 	sigemptyset(&actionINT.sa_mask);
 	actionINT.sa_flags = 0;
-
 	if (sigaction(SIGINT, &actionINT, NULL) < 0)
 	{
 		perror("Unable to install SIGINT handler\n");
 		exit(1);
 	}
+
 	DIR *directory;
 	if (argc > 1){
 		if(argv[1][0] != '-'){
