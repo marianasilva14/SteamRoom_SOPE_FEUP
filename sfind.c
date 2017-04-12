@@ -34,7 +34,7 @@ static void sigint_handler(int signo)
 	{
 		case 'Y':
 		printf("Process terminated!\n");
-		killpg(precessGroup_pid, SIGUSR1);
+		killpg(precessGroup_pid, SIGKILL);
 		break;
 		case 'N':
 		printf("Process continue!\n");
@@ -109,12 +109,12 @@ int readDirInfo(char* actualDir){
 			if (fork() == 0) //filho
 			{
 				signal(getpid(), &sigint_child_handler);
-			printf("I am process %d, my parent is %d, Opening %s\n ",getpid(),getppid(),dirName);
-			char *nextDirPath = cwd;
-			strcat(nextDirPath,"/");
-			strcat(nextDirPath,dirName);
-			printf("Next dir path:%s\n",nextDirPath);
-			if(readDirInfo(nextDirPath))
+				printf("I am process %d, my parent is %d, Opening %s\n",getpid(),getppid(),dirName);
+				char *nextDirPath = cwd;
+				strcat(nextDirPath,"/");
+				strcat(nextDirPath,dirName);
+				printf("Next dir path:%s\n",nextDirPath);
+				if(readDirInfo(nextDirPath))
 				return 1;
 			}
 			else{
@@ -131,7 +131,7 @@ int readDirInfo(char* actualDir){
 int main(int argc, char **argv){
 	/*Add SIGINT Handler*/
 	if(setHandlerSIGINT())
-		exit(1);
+	exit(1);
 
 	char *actualDir;
 	/*Change dir*/
@@ -142,7 +142,7 @@ int main(int argc, char **argv){
 	}
 
 	if(readDirInfo(actualDir))
-		return 1;
+	return 1;
 
 	return 0;
 }
