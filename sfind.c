@@ -131,11 +131,13 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 
 
 int readDirInfo(char* actualDir, Args* args){
-	chdir(actualDir);
+	if (chdir(actualDir) == -1){
+		perror("Error changing directory: ");
+	}
 	strcat(actualDir,"/");
 	DIR *directory;
 	if ((directory = opendir(".")) == NULL){
-		perror("Error Reading Dir\n");
+		perror("Error Reading Dir: n");
 	}
 
 	struct dirent *file;
@@ -146,7 +148,7 @@ int readDirInfo(char* actualDir, Args* args){
 		int perms = mask & file_info.st_mode;
 
 		if (stat(fileName,&file_info)==-1){
-			printf("Failed to open directory %s\n", fileName);
+			printf("Failed to read file %s\n", fileName);
 			perror("stat");
 			return 1;
 		}
@@ -165,6 +167,8 @@ int readDirInfo(char* actualDir, Args* args){
 		}
 	}
 	closedir(directory);
+	int status;
+	wait(&status);
 	return 0;
 }
 
@@ -190,15 +194,13 @@ int createChild(const char* fileName, Args* args){
 	if (pid == 0) //filho
 	{
 		//printf("%d: my parent is %d, Opening %s\n",getpid(),getppid(),fileName);
-		readDirInfo(nextDirPath, args);
+		int errorReadingFile = -1;
+		if (readDirInfo(nextDirPath, args) == errorReadingFile){
+			exit(errorReadingFile);
+		};
 		exit(0);
 	}
-	else if (pid > 0){ //parent
-		int status;
-		wait(&status);
-		//printf("%d: Child %d terminated\n",getpid(),pid);
-	}
-	else{ //error
+	else if (pid<0){ //error
 		return 1;
 	}
 	return 0;
@@ -251,6 +253,7 @@ int main(int argc, char **argv){
 		return 1;
 	}
 	signal(SIGUSR1, SIG_IGN);
+	//signal(SIGCHLD,SIG_IGN);
 
 	if(argc < 5){
 		char * line = "Args: [PATH] -[NAME | TYPE] [FILENAME | TYPE | PERM] -[PRINT | DELETE]\n";
@@ -274,8 +277,9 @@ int main(int argc, char **argv){
 	{
 		signal(SIGINT, &sigint_child_handler);
 		signal(SIGUSR1, &sigusr_handler);
-		readDirInfo(actualDir, &args);
-
+		if (readDirInfo(actualDir, &args)==-1){
+			exit(-1);
+		}
 		exit(0);
 	}
 	else if (pid > 0){ //parent
