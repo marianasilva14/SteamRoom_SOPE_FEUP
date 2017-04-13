@@ -88,7 +88,6 @@ int readDirInfo(const char* actualDir){
 	return 0;
 }
 
-
 char* getNextDir(const char* fileName){
 	char cwd[1024];
 	if(getcwd(cwd,sizeof(cwd)) == NULL){
@@ -113,7 +112,7 @@ int createChild(const char* fileName){
 	if (pid == 0) //filho
 	{
 		printf("%d: my parent is %d, Opening %s\n",getpid(),getppid(),fileName);
-		readDirInfo(fileName);
+		readDirInfo(nextDirPath);
 		exit(0);
 	}
 	else if (pid > 0){ //parent
