@@ -33,9 +33,9 @@ static void sigint_child_handler(int signo)
 	sigset_t newmask, oldmask;
 	sigemptyset(&newmask);
 	sigaddset(&newmask, SIGUSR1);
-	sigprocmask(SIG_BLOCK, &newmask, &oldmask);
-	sigsuspend(&oldmask);
-	sigprocmask(SIG_SETMASK, &oldmask, NULL);
+	sigprocmask(SIG_BLOCK, &newmask, &oldmask);//oldmask <- newmask; newmask<- newmask | currentmask
+	sigsuspend(&oldmask); //temporarly replaces currentmask<-oldmask and suspends the process until a signal arrives
+	sigprocmask(SIG_SETMASK, &oldmask, NULL);// currentmask<-oldmask(only sigusr1 blocked)
 }
 
 static void sigusr_handler(int signo)
@@ -68,6 +68,66 @@ static void sigint_handler(int signo)
 	}
 }
 
+void printOrDelete(Args* args, char* fileName, char *actualDir){
+	if(args->print){
+		printf("%s%s\n",actualDir,fileName);
+	}
+	if (args->delete){
+		execlp("rm","rm",fileName,NULL);
+	}
+}
+
+
+void processArguments(Args * args, int perms, char* fileType, char* fileName, char* actualDir){
+	if (args->name){
+		if (args->type){
+			if (args->perm){
+				printf("Debug: perm activated 1\n");
+				if ((perms & args->permHex) && strcmp(args->typename,fileType) == 0 && strcmp(args->filename,fileName) == 0){
+					printOrDelete(args,fileName,actualDir);
+				}
+			}
+			else if( strcmp(args->typename,"d") == 0 && strcmp(args->filename,fileName) == 0){
+					printOrDelete(args,fileName,actualDir);
+			}
+		}else{
+			if (args->perm){
+				printf("Debug: perm activated 2\n");
+				if ((perms & args->permHex) && strcmp(args->filename,fileName) == 0){
+					printOrDelete(args,fileName,actualDir);
+				}
+			}
+			else if (strcmp(args->filename,fileName) == 0){
+				printOrDelete(args,fileName,actualDir);
+			}
+		}
+	}
+	else
+	{
+		if (args->type){
+			if (args->perm){
+				printf("Debug: perm activated 3\n");
+				if ((perms & args->permHex) && strcmp(args->typename,fileType) == 0){
+					printOrDelete(args,fileName,actualDir);
+				}
+			}
+			else if( strcmp(args->typename,"d") == 0){
+					printOrDelete(args,fileName,actualDir);
+			}
+		}
+		else{
+			if (args->perm){
+				printf("Debug: perm activated 4\n");
+				if ((perms & args->permHex)){
+					printOrDelete(args,fileName,actualDir);
+				}
+			}
+		}
+	}
+}
+
+
+
 int readDirInfo(char* actualDir, Args* args){
 	chdir(actualDir);
 	strcat(actualDir,"/");
@@ -80,6 +140,8 @@ int readDirInfo(char* actualDir, Args* args){
 	struct stat file_info;
 	while((file = readdir(directory)) != NULL){
 		char *fileName = (*file).d_name;
+		int mask = 0x01ff;
+		int perms = mask & file_info.st_mode;
 		//printf("Current file name: %s\n",fileName);
 		if (stat(fileName,&file_info)==-1){
 			printf("Failed to open directory %s\n", fileName);
@@ -90,12 +152,11 @@ int readDirInfo(char* actualDir, Args* args){
 			if (fileName[0] == '.' && (fileName[1] == '\0' || fileName[1] == '.')){
 				continue;
 			}
+			//processArguments(args,perms,"d",fileName,actualDir);
 			//printf("%d: Directory:%s\n",getpid(), fileName);
 			createChild(fileName, args);
 		}
 		else if (S_ISREG(file_info.st_mode)){
-			int mask = 0x01ff;
-			int perms = mask & file_info.st_mode;
 			if(args->print){
 				if(args->name && strcmp(args->filename, fileName) == 0){
 					write(STDOUT_FILENO,actualDir,strlen(actualDir));
@@ -122,7 +183,7 @@ int readDirInfo(char* actualDir, Args* args){
 	return 0;
 }
 
-char* getNextDir(const char* fileName){
+char * getNextDir(const char* fileName){
 	char cwd[1024];
 	if(getcwd(cwd,sizeof(cwd)) == NULL){
 		perror("Error reading cwd\n");
@@ -130,7 +191,8 @@ char* getNextDir(const char* fileName){
 	else{
 		//printf("Current Working Dir:%s\n",cwd);
 	}
-	char* nextDirPath = cwd;
+	char *nextDirPath = malloc(sizeof(char)*1024);
+	sprintf(nextDirPath,"%s",cwd);
 	strcat(nextDirPath,"/");
 	strcat(nextDirPath,fileName);
 	/*char* line = "Next dir path:";
@@ -160,7 +222,7 @@ int createChild(const char* fileName, Args* args){
 	return 0;
 }
 
-void preperaArgs(int argc, char **argv, Args* args){
+void prepareArgs(int argc, char **argv, Args* args){
 	int i = 2;
 	if(argc == 5){
 		while(argv[i] != NULL){
@@ -211,7 +273,7 @@ int main(int argc, char **argv){
 
 	if(argc != 5 && argc != 3){
 		char * line = "Args: [PATH] -[NAME | TYPE] [FILENAME | TYPE | PERM] -[PRINT | DELETE]\n";
-		write(STDOUT_FILENO,line,strlen(line));	
+		write(STDOUT_FILENO,line,strlen(line));
 		return 1;
 	}
 
@@ -224,14 +286,16 @@ int main(int argc, char **argv){
 	}
 
 	Args args;
-	preperaArgs(argc, argv, &args);
+	prepareArgs(argc, argv, &args);
 
 	pid_t pid = fork();
 	if (pid == 0) //filho
 	{
 		signal(SIGINT, &sigint_child_handler);
 		signal(SIGUSR1, &sigusr_handler);
-		readDirInfo(getNextDir(actualDir), &args);
+		char* nextDirPath = getNextDir(actualDir);
+		printf("NExt dir Path:%s\n",nextDirPath);
+		readDirInfo(nextDirPath, &args);
 		exit(0);
 	}
 	else if (pid > 0){ //parent
