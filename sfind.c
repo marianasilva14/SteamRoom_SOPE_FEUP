@@ -167,7 +167,8 @@ int readDirInfo(char* actualDir, Args* args){
 			processArguments(args,perms,"d",fileName,actualDir);
 
 		}
-		else if(S_ISFIFO(file_info.st_mode)){
+		else if(S_ISFIFO(file_info.st_mode))
+		{
 			processArguments(args,perms,"d",fileName,actualDir);
 
 		}
