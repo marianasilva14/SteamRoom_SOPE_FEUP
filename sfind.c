@@ -89,7 +89,7 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
-			else if( strcmp(args->typename,"d") == 0 && strcmp(args->filename,fileName) == 0){
+			else if( strcmp(args->typename,fileType) == 0 && strcmp(args->filename,fileName) == 0){
 				printOrDelete(args,fileName,actualDir,fileType);
 			}
 		}else{
@@ -111,7 +111,7 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
-			else if( strcmp(args->typename,"d") == 0){
+			else if( strcmp(args->typename,fileType) == 0){
 				printOrDelete(args,fileName,actualDir,fileType);
 			}
 		}
