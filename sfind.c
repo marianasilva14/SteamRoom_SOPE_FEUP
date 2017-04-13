@@ -137,8 +137,7 @@ int main(int argc, char **argv){
 		perror("Unable to install SIGINT handler\n");
 		return 1;
 	}
-	void (*oldhandler)(int);
- 	oldhandler = signal(SIGUSR1, SIG_IGN);
+	signal(SIGUSR1, SIG_IGN);
 
 	char* actualDir;
 	/*Change dir*/
