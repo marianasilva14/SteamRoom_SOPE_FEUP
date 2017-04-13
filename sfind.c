@@ -85,7 +85,6 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 	if (args->name){
 		if (args->type){
 			if (args->perm){
-				printf("Debug: perm activated 1\n");
 				if (((perms & args->permHex) == args->permHex) && strcmp(args->typename,fileType) == 0 && strcmp(args->filename,fileName) == 0){
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
@@ -95,7 +94,6 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 			}
 		}else{
 			if (args->perm){
-				printf("Debug: perm activated 2\n");
 				if (((perms & args->permHex) == args->permHex) && strcmp(args->filename,fileName) == 0){
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
@@ -109,7 +107,6 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 	{
 		if (args->type){
 			if (args->perm){
-				printf("Debug: perm activated 3\n");
 				if (((perms & args->permHex) == args->permHex) && strcmp(args->typename,fileType) == 0){
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
@@ -120,7 +117,6 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 		}
 		else{
 			if (args->perm){
-				printf("Debug: perm activated 4\n");
 				//printf("Perms: %o, PermHex: %o\n",perms,args->permHex);
 				if ((perms & args->permHex) == args->permHex){
 
@@ -149,8 +145,6 @@ int readDirInfo(char* actualDir, Args* args){
 		int mask = 0x01ff;
 		int perms = mask & file_info.st_mode;
 
-		printf("File: %s ;st_mode %d ;perms: 0%d\n",fileName,file_info.st_mode,perms);
-		//printf("Current file name: %s\n",fileName);
 		if (stat(fileName,&file_info)==-1){
 			printf("Failed to open directory %s\n", fileName);
 			perror("stat");
@@ -163,8 +157,11 @@ int readDirInfo(char* actualDir, Args* args){
 			processArguments(args,perms,"d",fileName,actualDir);
 			createChild(fileName, args);
 		}
-		else if (S_ISREG(file_info.st_mode) || S_ISLNK(file_info.st_mode)){
+		else if (S_ISREG(file_info.st_mode)){
 			processArguments(args,perms,"f",fileName,actualDir);
+		}
+		else if (S_ISLNK(file_info.st_mode)){
+			processArguments(args,perms,"l",fileName,actualDir);
 		}
 	}
 	closedir(directory);
@@ -176,15 +173,10 @@ char * getNextDir(const char* fileName){
 	if(getcwd(cwd,sizeof(cwd)) == NULL){
 		perror("Error reading cwd\n");
 	}
-	else{
-		//printf("Current Working Dir:%s\n",cwd);
-	}
-	char *nextDir = cwd;
-	sprintf(nextDir,"%s",cwd);
-	strcat(nextDir,"/");
-	strcat(nextDir,fileName);
-	char *nextDirPath = malloc(sizeof(nextDir));
-	strcpy(nextDirPath,nextDir);
+	char *nextDirPath = malloc(sizeof(char)*1024);
+	sprintf(nextDirPath,"%s",cwd);
+	strcat(nextDirPath,"/");
+	strcat(nextDirPath,fileName);
 	/*char* line = "Next dir path:";
 	write(STDOUT_FILENO,line,strlen(line));
 	write(STDOUT_FILENO,nextDirPath,strlen(nextDirPath));
