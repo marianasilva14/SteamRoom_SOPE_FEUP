@@ -176,7 +176,7 @@ int readDirInfo(char* actualDir, Args* args){
 				if(args->name && strcmp(args->filename, fileName) == 0){
 					execlp("rm", "rm", fileName, NULL);
 				}
-				else if(args->perm && (perms & args->permHex)){
+				else if(args->perm && (perms & args->permHex) == args->permHex){
 					execlp("rm", "rm", fileName, NULL);
 				}
 			}
