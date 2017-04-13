@@ -86,7 +86,7 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 		if (args->type){
 			if (args->perm){
 				printf("Debug: perm activated 1\n");
-				if ((perms & args->permHex) && strcmp(args->typename,fileType) == 0 && strcmp(args->filename,fileName) == 0){
+				if (((perms & args->permHex) == args->permHex) && strcmp(args->typename,fileType) == 0 && strcmp(args->filename,fileName) == 0){
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
@@ -96,7 +96,7 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 		}else{
 			if (args->perm){
 				printf("Debug: perm activated 2\n");
-				if ((perms & args->permHex) && strcmp(args->filename,fileName) == 0){
+				if (((perms & args->permHex) == args->permHex) && strcmp(args->filename,fileName) == 0){
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
@@ -110,7 +110,7 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 		if (args->type){
 			if (args->perm){
 				printf("Debug: perm activated 3\n");
-				if ((perms & args->permHex) && strcmp(args->typename,fileType) == 0){
+				if (((perms & args->permHex) == args->permHex) && strcmp(args->typename,fileType) == 0){
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
@@ -121,7 +121,10 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 		else{
 			if (args->perm){
 				printf("Debug: perm activated 4\n");
-				if ((perms & args->permHex)){
+				//printf("Perms: %o, PermHex: %o\n",perms,args->permHex);
+				if ((perms & args->permHex) == args->permHex){
+
+					printf("Bit-Bit And:%o\n", perms & args->permHex);
 					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
@@ -145,6 +148,8 @@ int readDirInfo(char* actualDir, Args* args){
 		char *fileName = (*file).d_name;
 		int mask = 0x01ff;
 		int perms = mask & file_info.st_mode;
+
+		printf("File: %s ;st_mode %d ;perms: 0%d\n",fileName,file_info.st_mode,perms);
 		//printf("Current file name: %s\n",fileName);
 		if (stat(fileName,&file_info)==-1){
 			printf("Failed to open directory %s\n", fileName);
@@ -250,6 +255,7 @@ void prepareArgs(int argc, char **argv, Args* args){
 			int octalNumber;
 			sscanf(argv[++i], "%o", &octalNumber);
 			args->permHex = octalNumber;
+			printf("Octal read : %o\n",octalNumber);
 		}
 		else if(strcmp(a, "-print") == 0){
 			args->print = 1;
