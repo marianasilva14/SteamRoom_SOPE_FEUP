@@ -150,7 +150,7 @@ int readDirInfo(char* actualDir, Args* args){
 		if (stat(fileName,&file_info)==-1){
 			printf("Failed to read file %s\n", fileName);
 			perror("stat");
-			return 1;
+			return -1;
 		}
 		if (S_ISDIR(file_info.st_mode)){
 			if (fileName[0] == '.' && (fileName[1] == '\0' || fileName[1] == '.')){
@@ -168,7 +168,7 @@ int readDirInfo(char* actualDir, Args* args){
 	}
 	closedir(directory);
 	int status;
-	wait(&status);
+	while(wait(&status)>0);
 	return 0;
 }
 
@@ -284,7 +284,7 @@ int main(int argc, char **argv){
 	}
 	else if (pid > 0){ //parent
 		int status;
-		while(wait(&status) != pid);
+		while(wait(&status)>0);
 	}
 	return 0;
 }
