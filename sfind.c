@@ -68,11 +68,14 @@ static void sigint_handler(int signo)
 	}
 }
 
-void printOrDelete(Args* args, char* fileName, char *actualDir){
+void printOrDelete(Args* args, char* fileName, char *actualDir, char* fileType){
 	if(args->print){
 		printf("%s%s\n",actualDir,fileName);
 	}
 	if (args->delete){
+		if (strcmp(fileType, "d")==0){
+			execlp("rm","rm","-ri",fileName,NULL);
+		}
 		execlp("rm","rm",fileName,NULL);
 	}
 }
@@ -84,21 +87,21 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 			if (args->perm){
 				printf("Debug: perm activated 1\n");
 				if ((perms & args->permHex) && strcmp(args->typename,fileType) == 0 && strcmp(args->filename,fileName) == 0){
-					printOrDelete(args,fileName,actualDir);
+					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
 			else if( strcmp(args->typename,"d") == 0 && strcmp(args->filename,fileName) == 0){
-					printOrDelete(args,fileName,actualDir);
+					printOrDelete(args,fileName,actualDir,fileType);
 			}
 		}else{
 			if (args->perm){
 				printf("Debug: perm activated 2\n");
 				if ((perms & args->permHex) && strcmp(args->filename,fileName) == 0){
-					printOrDelete(args,fileName,actualDir);
+					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
 			else if (strcmp(args->filename,fileName) == 0){
-				printOrDelete(args,fileName,actualDir);
+				printOrDelete(args,fileName,actualDir,fileType);
 			}
 		}
 	}
@@ -108,18 +111,18 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 			if (args->perm){
 				printf("Debug: perm activated 3\n");
 				if ((perms & args->permHex) && strcmp(args->typename,fileType) == 0){
-					printOrDelete(args,fileName,actualDir);
+					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
 			else if( strcmp(args->typename,"d") == 0){
-					printOrDelete(args,fileName,actualDir);
+					printOrDelete(args,fileName,actualDir,fileType);
 			}
 		}
 		else{
 			if (args->perm){
 				printf("Debug: perm activated 4\n");
 				if ((perms & args->permHex)){
-					printOrDelete(args,fileName,actualDir);
+					printOrDelete(args,fileName,actualDir,fileType);
 				}
 			}
 		}
@@ -152,7 +155,7 @@ int readDirInfo(char* actualDir, Args* args){
 			if (fileName[0] == '.' && (fileName[1] == '\0' || fileName[1] == '.')){
 				continue;
 			}
-			//processArguments(args,perms,"d",fileName,actualDir);
+			processArguments(args,perms,"d",fileName,actualDir);
 			//printf("%d: Directory:%s\n",getpid(), fileName);
 			createChild(fileName, args);
 		}
