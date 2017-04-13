@@ -57,13 +57,13 @@ static void sigint_handler(int signo)
 	pid_t precessGroup_pid = getpgid(getpid());
 	switch(input)
 	{
-		case 'Y':
-			line = "Process terminated!\n";
-			write(STDOUT_FILENO,line,strlen(line));
-			killpg(precessGroup_pid, SIGKILL);
+	case 'Y':
+		line = "Process terminated!\n";
+		write(STDOUT_FILENO,line,strlen(line));
+		killpg(precessGroup_pid, SIGKILL);
 		break;
-		case 'N':
-			killpg(precessGroup_pid, SIGUSR1);
+	case 'N':
+		killpg(precessGroup_pid, SIGUSR1);
 		break;
 	}
 }
@@ -91,7 +91,7 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 				}
 			}
 			else if( strcmp(args->typename,"d") == 0 && strcmp(args->filename,fileName) == 0){
-					printOrDelete(args,fileName,actualDir,fileType);
+				printOrDelete(args,fileName,actualDir,fileType);
 			}
 		}else{
 			if (args->perm){
@@ -115,7 +115,7 @@ void processArguments(Args * args, int perms, char* fileType, char* fileName, ch
 				}
 			}
 			else if( strcmp(args->typename,"d") == 0){
-					printOrDelete(args,fileName,actualDir,fileType);
+				printOrDelete(args,fileName,actualDir,fileType);
 			}
 		}
 		else{
@@ -159,7 +159,23 @@ int readDirInfo(char* actualDir, Args* args){
 			//printf("%d: Directory:%s\n",getpid(), fileName);
 			createChild(fileName, args);
 		}
-		else if (S_ISREG(file_info.st_mode)){
+		/*else if(S_ISCHR(file_info.st_mode)){
+			processArguments(args,perms,"d",fileName,actualDir);
+
+		}
+		else if( S_ISBLK(file_info.st_mode)){
+			processArguments(args,perms,"d",fileName,actualDir);
+
+		}
+		else if(S_ISFIFO(file_info.st_mode)){
+			processArguments(args,perms,"d",fileName,actualDir);
+
+		}
+		if(S_ISSOCK(file_info.st_mode)){
+			processArguments(args,perms,"d",fileName,actualDir);
+
+		}*/
+		else if (S_ISREG(file_info.st_mode) || S_ISLNK(file_info.st_mode)){
 			if(args->print){
 				if(args->name && strcmp(args->filename, fileName) == 0){
 					write(STDOUT_FILENO,actualDir,strlen(actualDir));
@@ -236,24 +252,24 @@ void prepareArgs(int argc, char **argv, Args* args){
 		while(argv[i] != NULL){
 			char* a = argv[i];
 			if(strcmp(a,"-name") == 0){
-					args->name = 1;
-					args->filename = argv[++i];
+				args->name = 1;
+				args->filename = argv[++i];
 			}
 			else if(strcmp(a, "-type") == 0){
-					args->type = 1;
-					args->typename = argv[++i];
+				args->type = 1;
+				args->typename = argv[++i];
 			}
 			else if(strcmp(a, "-perm") == 0){
-					args->perm = 1;
-					int octalNumber;
-					sscanf(argv[++i], "%o", &octalNumber);
-					args->permHex = octalNumber;
+				args->perm = 1;
+				int octalNumber;
+				sscanf(argv[++i], "%o", &octalNumber);
+				args->permHex = octalNumber;
 			}
 			else if(strcmp(a, "-print") == 0){
-					args->print = 1;
+				args->print = 1;
 			}
 			else if(strcmp(a, "-delete") == 0){
-					args->delete = 1;
+				args->delete = 1;
 			}
 			i++;
 		}
