@@ -10,8 +10,22 @@
 #include <ctype.h>
 #include <signal.h>
 
+
+typedef struct{
+	int name;
+	char* filename;
+	int type;
+	char* typename;
+	int perm;
+	char* permname;
+	int print;
+	int delete;
+}Args;
+
+
+
 //PROTOS
-int createChild(const char* fileName);
+int createChild(const char* fileName, Args* args);
 
 //handler CRTL-C
 static void sigint_child_handler(int signo)
@@ -49,15 +63,14 @@ static void sigint_handler(int signo)
 			killpg(precessGroup_pid, SIGKILL);
 		break;
 		case 'N':
-			line = "Process continue!\n";
-			write(STDOUT_FILENO,line,strlen(line));
 			killpg(precessGroup_pid, SIGUSR1);
 		break;
 	}
 }
 
-int readDirInfo(const char* actualDir){
+int readDirInfo(char* actualDir, Args* args){
 	chdir(actualDir);
+	strcat(actualDir,"/");
 	DIR *directory;
 	if ((directory = opendir(".")) == NULL){
 		perror("Error Reading Dir\n");
@@ -69,7 +82,7 @@ int readDirInfo(const char* actualDir){
 		char *fileName = (*file).d_name;
 		//printf("Current file name: %s\n",fileName);
 		if (stat(fileName,&file_info)==-1){
-			printf("%d: Failed to open directory %s\n", getpid(),fileName);
+			printf("Failed to open directory %s\n", fileName);
 			perror("stat");
 			return 1;
 		}
@@ -77,11 +90,15 @@ int readDirInfo(const char* actualDir){
 			if (fileName[0] == '.' && (fileName[1] == '\0' || fileName[1] == '.')){
 				continue;
 			}
-			printf("%d: Directory:%s\n",getpid(), fileName);
-			createChild(fileName);
+			//printf("%d: Directory:%s\n",getpid(), fileName);
+			createChild(fileName, args);
 		}
 		else if (S_ISREG(file_info.st_mode)){
-			printf("%d: Regular file:%s\n",getpid(),fileName);
+			if((*args).print && strcmp((*args).filename, fileName) == 0){
+				write(STDOUT_FILENO,actualDir,strlen(actualDir));
+				write(STDOUT_FILENO,fileName,strlen(fileName));
+				write(STDOUT_FILENO,"\n",1);
+			}
 		}
 	}
 	closedir(directory);
@@ -99,20 +116,20 @@ char* getNextDir(const char* fileName){
 	char* nextDirPath = cwd;
 	strcat(nextDirPath,"/");
 	strcat(nextDirPath,fileName);
-	char* line = "Next dir path:";
+	/*char* line = "Next dir path:";
 	write(STDOUT_FILENO,line,strlen(line));
 	write(STDOUT_FILENO,nextDirPath,strlen(nextDirPath));
-	write(STDOUT_FILENO,"\n",1);
+	write(STDOUT_FILENO,"\n",1);*/
 	return nextDirPath;
 }
 
-int createChild(const char* fileName){
+int createChild(const char* fileName, Args* args){
 	char *nextDirPath = getNextDir(fileName);
 	pid_t pid = fork();
 	if (pid == 0) //filho
 	{
-		printf("%d: my parent is %d, Opening %s\n",getpid(),getppid(),fileName);
-		readDirInfo(nextDirPath);
+		//printf("%d: my parent is %d, Opening %s\n",getpid(),getppid(),fileName);
+		readDirInfo(nextDirPath, args);
 		exit(0);
 	}
 	else if (pid > 0){ //parent
@@ -125,6 +142,7 @@ int createChild(const char* fileName){
 	}
 	return 0;
 }
+
 
 int main(int argc, char **argv){
 	/*Add SIGINT Handler*/
@@ -139,6 +157,12 @@ int main(int argc, char **argv){
 	}
 	signal(SIGUSR1, SIG_IGN);
 
+	if(argc != 5 && argc != 3){
+		char * line = "Args: [PATH] -[NAME | TYPE] [FILENAME | TYPE | PERM] -[PRINT | DELETE]\n";
+		write(STDOUT_FILENO,line,strlen(line));	
+		return 1;
+	}
+
 	char* actualDir;
 	/*Change dir*/
 	if (argc > 1){
@@ -147,12 +171,45 @@ int main(int argc, char **argv){
 		}
 	}
 
+	Args args;
+	int i = 2;
+	if(argc == 5){
+		while(argv[i] != NULL){
+			char* a = argv[i];
+			if(strcmp(a,"-name") == 0){
+					args.name = 1;
+					args.filename = argv[++i];
+			}
+			else if(strcmp(a, "-type") == 0){
+					args.type = 1;
+					args.typename = argv[++i];
+			}
+			else if(strcmp(a, "-perm") == 0){
+					args.perm = 1;
+					args.permname = argv[++i];
+			}
+			else if(strcmp(a, "-print") == 0){
+					args.print = 1;
+			}
+			else if(strcmp(a, "-delete") == 0){
+					args.delete = 1;
+			}
+			i++;
+		}
+	}
+	else
+	{
+		args.name = 1;
+		args.filename = argv[i];
+		args.print = 1;
+	}
+
 	pid_t pid = fork();
 	if (pid == 0) //filho
 	{
 		signal(SIGINT, &sigint_child_handler);
 		signal(SIGUSR1, &sigusr_handler);
-		readDirInfo(actualDir);
+		readDirInfo(getNextDir(actualDir), &args);
 		exit(0);
 	}
 	else if (pid > 0){ //parent
