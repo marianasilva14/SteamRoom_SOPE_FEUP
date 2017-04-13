@@ -99,6 +99,9 @@ int readDirInfo(char* actualDir, Args* args){
 				write(STDOUT_FILENO,fileName,strlen(fileName));
 				write(STDOUT_FILENO,"\n",1);
 			}
+			else if((*args).delete && strcmp((*args).filename, fileName) == 0){
+				execlp("rm", "rm", fileName, NULL);
+			}
 		}
 	}
 	closedir(directory);
