@@ -224,6 +224,11 @@ int createChild(const char* fileName, Args* args){
 
 void prepareArgs(int argc, char **argv, Args* args){
 	int i = 2;
+	args->perm = 0;
+	args->name = 0;
+	args->type = 0;
+	args->print =0;
+	args->delete = 0;
 	if(argc == 5){
 		while(argv[i] != NULL){
 			char* a = argv[i];
@@ -277,7 +282,7 @@ int main(int argc, char **argv){
 		return 1;
 	}
 
-	char* actualDir;
+	char* actualDir = ".";
 	/*Change dir*/
 	if (argc > 1){
 		if(argv[1][0] != '-'){
@@ -293,9 +298,8 @@ int main(int argc, char **argv){
 	{
 		signal(SIGINT, &sigint_child_handler);
 		signal(SIGUSR1, &sigusr_handler);
-		char* nextDirPath = getNextDir(actualDir);
-		printf("NExt dir Path:%s\n",nextDirPath);
-		readDirInfo(nextDirPath, &args);
+		readDirInfo(actualDir, &args);
+
 		exit(0);
 	}
 	else if (pid > 0){ //parent
