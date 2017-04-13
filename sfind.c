@@ -160,6 +160,41 @@ int createChild(const char* fileName, Args* args){
 	return 0;
 }
 
+void preperaArgs(int argc, char **argv, Args* args){
+	int i = 2;
+	if(argc == 5){
+		while(argv[i] != NULL){
+			char* a = argv[i];
+			if(strcmp(a,"-name") == 0){
+					args->name = 1;
+					args->filename = argv[++i];
+			}
+			else if(strcmp(a, "-type") == 0){
+					args->type = 1;
+					args->typename = argv[++i];
+			}
+			else if(strcmp(a, "-perm") == 0){
+					args->perm = 1;
+					int octalNumber;
+					sscanf(argv[++i], "%o", &octalNumber);
+					args->permHex = octalNumber;
+			}
+			else if(strcmp(a, "-print") == 0){
+					args->print = 1;
+			}
+			else if(strcmp(a, "-delete") == 0){
+					args->delete = 1;
+			}
+			i++;
+		}
+	}
+	else
+	{
+		args->name = 1;
+		args->filename = argv[i];
+		args->print = 1;
+	}
+}
 
 int main(int argc, char **argv){
 	/*Add SIGINT Handler*/
@@ -189,39 +224,7 @@ int main(int argc, char **argv){
 	}
 
 	Args args;
-	int i = 2;
-	if(argc == 5){
-		while(argv[i] != NULL){
-			char* a = argv[i];
-			if(strcmp(a,"-name") == 0){
-					args.name = 1;
-					args.filename = argv[++i];
-			}
-			else if(strcmp(a, "-type") == 0){
-					args.type = 1;
-					args.typename = argv[++i];
-			}
-			else if(strcmp(a, "-perm") == 0){
-					args.perm = 1;
-					int octalNumber;
-					sscanf(argv[++i], "%o", &octalNumber);
-					args.permHex = octalNumber;
-			}
-			else if(strcmp(a, "-print") == 0){
-					args.print = 1;
-			}
-			else if(strcmp(a, "-delete") == 0){
-					args.delete = 1;
-			}
-			i++;
-		}
-	}
-	else
-	{
-		args.name = 1;
-		args.filename = argv[i];
-		args.print = 1;
-	}
+	preperaArgs(argc, argv, &args);
 
 	pid_t pid = fork();
 	if (pid == 0) //filho
