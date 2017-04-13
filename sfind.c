@@ -160,7 +160,7 @@ int readDirInfo(char* actualDir, Args* args){
 			createChild(fileName, args);
 		}
 		else if (S_ISREG(file_info.st_mode)){
-			if(args->print){
+			/*if(args->print){
 				if(args->name && strcmp(args->filename, fileName) == 0){
 					write(STDOUT_FILENO,actualDir,strlen(actualDir));
 					write(STDOUT_FILENO,fileName,strlen(fileName));
@@ -179,7 +179,8 @@ int readDirInfo(char* actualDir, Args* args){
 				else if(args->perm && (perms & args->permHex)){
 					execlp("rm", "rm", fileName, NULL);
 				}
-			}
+			}*/
+			processArguments(args,perms,"f",fileName,actualDir);
 		}
 	}
 	closedir(directory);
@@ -232,37 +233,31 @@ void prepareArgs(int argc, char **argv, Args* args){
 	args->type = 0;
 	args->print =0;
 	args->delete = 0;
-	if(argc == 5){
-		while(argv[i] != NULL){
-			char* a = argv[i];
-			if(strcmp(a,"-name") == 0){
-					args->name = 1;
-					args->filename = argv[++i];
-			}
-			else if(strcmp(a, "-type") == 0){
-					args->type = 1;
-					args->typename = argv[++i];
-			}
-			else if(strcmp(a, "-perm") == 0){
-					args->perm = 1;
-					int octalNumber;
-					sscanf(argv[++i], "%o", &octalNumber);
-					args->permHex = octalNumber;
-			}
-			else if(strcmp(a, "-print") == 0){
-					args->print = 1;
-			}
-			else if(strcmp(a, "-delete") == 0){
-					args->delete = 1;
-			}
-			i++;
+
+
+  while(argv[i] != NULL){
+		char* a = argv[i];
+		if(strcmp(a,"-name") == 0){
+			args->name = 1;
+			args->filename = argv[++i];
 		}
-	}
-	else
-	{
-		args->name = 1;
-		args->filename = argv[i];
-		args->print = 1;
+		else if(strcmp(a, "-type") == 0){
+			args->type = 1;
+			args->typename = argv[++i];
+		}
+		else if(strcmp(a, "-perm") == 0){
+			args->perm = 1;
+			int octalNumber;
+			sscanf(argv[++i], "%o", &octalNumber);
+			args->permHex = octalNumber;
+		}
+		else if(strcmp(a, "-print") == 0){
+			args->print = 1;
+		}
+		else if(strcmp(a, "-delete") == 0){
+			args->delete = 1;
+		}
+		i++;
 	}
 }
 
@@ -279,7 +274,7 @@ int main(int argc, char **argv){
 	}
 	signal(SIGUSR1, SIG_IGN);
 
-	if(argc != 5 && argc != 3){
+	if(argc < 5){
 		char * line = "Args: [PATH] -[NAME | TYPE] [FILENAME | TYPE | PERM] -[PRINT | DELETE]\n";
 		write(STDOUT_FILENO,line,strlen(line));
 		return 1;
