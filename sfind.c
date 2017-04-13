@@ -163,8 +163,11 @@ int readDirInfo(char* actualDir, Args* args){
 			processArguments(args,perms,"d",fileName,actualDir);
 			createChild(fileName, args);
 		}
-		else if (S_ISREG(file_info.st_mode) || S_ISLNK(file_info.st_mode)){
+		else if (S_ISREG(file_info.st_mode)){
 			processArguments(args,perms,"f",fileName,actualDir);
+		}
+		else if(S_ISLNK(file_info.st_mode)){
+			processArguments(args,perms,"l",fileName,actualDir);
 		}
 	}
 	closedir(directory);
