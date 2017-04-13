@@ -165,11 +165,15 @@ int readDirInfo(char* actualDir, Args* args){
 		}
 		else if (S_ISREG(file_info.st_mode)){
 			processArguments(args,perms,"f",fileName,actualDir);
+			createChild(fileName, args);
 		}
 		else if(S_ISLNK(file_info.st_mode)){
 			processArguments(args,perms,"l",fileName,actualDir);
+			createChild(fileName, args);
 		}
 	}
+	int status;
+	wait(&status);
 	closedir(directory);
 	return 0;
 }
@@ -204,12 +208,7 @@ int createChild(const char* fileName, Args* args){
 		readDirInfo(nextDirPath, args);
 		exit(0);
 	}
-	else if (pid > 0){ //parent
-		int status;
-		wait(&status);
-		//printf("%d: Child %d terminated\n",getpid(),pid);
-	}
-	else{ //error
+	else if (pid < 0){ //error
 		return 1;
 	}
 	return 0;
@@ -286,7 +285,6 @@ int main(int argc, char **argv){
 		signal(SIGINT, &sigint_child_handler);
 		signal(SIGUSR1, &sigusr_handler);
 		readDirInfo(actualDir, &args);
-
 		exit(0);
 	}
 	else if (pid > 0){ //parent
