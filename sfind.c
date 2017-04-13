@@ -17,7 +17,7 @@ typedef struct{
 	int type;
 	char* typename;
 	int perm;
-	char* permname;
+	int permHex;
 	int print;
 	int delete;
 }Args;
@@ -94,13 +94,27 @@ int readDirInfo(char* actualDir, Args* args){
 			createChild(fileName, args);
 		}
 		else if (S_ISREG(file_info.st_mode)){
-			if((*args).print && strcmp((*args).filename, fileName) == 0){
-				write(STDOUT_FILENO,actualDir,strlen(actualDir));
-				write(STDOUT_FILENO,fileName,strlen(fileName));
-				write(STDOUT_FILENO,"\n",1);
+			int mask = 0x01ff;
+			int perms = mask & file_info.st_mode;
+			if(args->print){
+				if(args->name && strcmp(args->filename, fileName) == 0){
+					write(STDOUT_FILENO,actualDir,strlen(actualDir));
+					write(STDOUT_FILENO,fileName,strlen(fileName));
+					write(STDOUT_FILENO,"\n",1);
+				}
+				else if(args->perm && (perms & args->permHex)){
+					write(STDOUT_FILENO,actualDir,strlen(actualDir));
+					write(STDOUT_FILENO,fileName,strlen(fileName));
+					write(STDOUT_FILENO,"\n",1);
+				}
 			}
-			else if((*args).delete && strcmp((*args).filename, fileName) == 0){
-				execlp("rm", "rm", fileName, NULL);
+			else if(args->delete){
+				if(args->name && strcmp(args->filename, fileName) == 0){
+					execlp("rm", "rm", fileName, NULL);
+				}
+				else if(args->perm && (perms & args->permHex)){
+					execlp("rm", "rm", fileName, NULL);
+				}
 			}
 		}
 	}
@@ -189,7 +203,9 @@ int main(int argc, char **argv){
 			}
 			else if(strcmp(a, "-perm") == 0){
 					args.perm = 1;
-					args.permname = argv[++i];
+					int octalNumber;
+					sscanf(argv[++i], "%o", &octalNumber);
+					args.permHex = octalNumber;
 			}
 			else if(strcmp(a, "-print") == 0){
 					args.print = 1;
@@ -220,5 +236,4 @@ int main(int argc, char **argv){
 		while(wait(&status) != pid);
 	}
 	return 0;
-
 }
