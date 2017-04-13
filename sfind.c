@@ -41,25 +41,35 @@ static void sigint_child_handler(int signo)
 static void sigusr_handler(int signo)
 {
 	char* line = "Process continue!\n";
-	write(STDOUT_FILENO,line,strlen(line));
+	if (write(STDOUT_FILENO,line,strlen(line)) == -1){
+		perror("Write Error:");
+	}
 }
 
 //handler CRTL-C
 static void sigint_handler(int signo)
 {
 	char* line = "In SIGINT handler ...\n";
-	write(STDOUT_FILENO,line,strlen(line));
+	if(write(STDOUT_FILENO,line,strlen(line)) == -1){
+		perror("Write Error:");
+	}
 	line = "Are you sure you want to terminate (Y/N)?\n";
-	write(STDOUT_FILENO,line,strlen(line));
+	if(write(STDOUT_FILENO,line,strlen(line))==-1){
+		perror("Write Error:");
+	}
 	char input;
-	scanf("%s", &input);
+	if (scanf("%s", &input) == EOF){
+		perror("Error in scanf: ");
+	};
 	input = toupper(input);
 	pid_t precessGroup_pid = getpgid(getpid());
 	switch(input)
 	{
 	case 'Y':
 		line = "Process terminated!\n";
-		write(STDOUT_FILENO,line,strlen(line));
+		if(write(STDOUT_FILENO,line,strlen(line))==-1){
+			perror("Write Error:");
+		}
 		killpg(precessGroup_pid, SIGKILL);
 		break;
 	case 'N':
@@ -181,10 +191,6 @@ char * getNextDir(const char* fileName){
 	sprintf(nextDirPath,"%s",cwd);
 	strcat(nextDirPath,"/");
 	strcat(nextDirPath,fileName);
-	/*char* line = "Next dir path:";
-	write(STDOUT_FILENO,line,strlen(line));
-	write(STDOUT_FILENO,nextDirPath,strlen(nextDirPath));
-	write(STDOUT_FILENO,"\n",1);*/
 	return nextDirPath;
 }
 
@@ -257,7 +263,9 @@ int main(int argc, char **argv){
 
 	if(argc < 5){
 		char * line = "Args: [PATH] -[NAME | TYPE] [FILENAME | TYPE | PERM] -[PRINT | DELETE]\n";
-		write(STDOUT_FILENO,line,strlen(line));
+		if(write(STDOUT_FILENO,line,strlen(line))==-1){
+			perror("Write Error:");
+		}
 		return 1;
 	}
 
