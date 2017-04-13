@@ -159,23 +159,6 @@ int readDirInfo(char* actualDir, Args* args){
 			//printf("%d: Directory:%s\n",getpid(), fileName);
 			createChild(fileName, args);
 		}
-		/*else if(S_ISCHR(file_info.st_mode)){
-			processArguments(args,perms,"d",fileName,actualDir);
-
-		}
-		else if( S_ISBLK(file_info.st_mode)){
-			processArguments(args,perms,"d",fileName,actualDir);
-
-		}
-		else if(S_ISFIFO(file_info.st_mode))
-		{
-			processArguments(args,perms,"d",fileName,actualDir);
-
-		}
-		if(S_ISSOCK(file_info.st_mode)){
-			processArguments(args,perms,"d",fileName,actualDir);
-
-		}*/
 		else if (S_ISREG(file_info.st_mode) || S_ISLNK(file_info.st_mode)){
 			if(args->print){
 				if(args->name && strcmp(args->filename, fileName) == 0){
