@@ -231,7 +231,7 @@ int main(int argc, char **argv){
 	{
 		signal(SIGINT, &sigint_child_handler);
 		signal(SIGUSR1, &sigusr_handler);
-		readDirInfo(getNextDir(actualDir), &args);
+		readDirInfo(actualDir, &args);
 		exit(0);
 	}
 	else if (pid > 0){ //parent
