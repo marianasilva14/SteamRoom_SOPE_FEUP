@@ -37,6 +37,7 @@ void* handleRequest(void * args){
   }
   if (actualGender == 'N' || requestToRead.gender == actualGender){
     //Accept Request
+	requestToRead.state = ACEITE;
     sem_wait(sem); //decrements Semaphore
     //Start counting Time. When time = requesTime, post the semaphore to free 1 seat
 
@@ -45,9 +46,8 @@ void* handleRequest(void * args){
   else{
     //Reject the Request
     requestToRead.state = REJEITADO;
-    write(fifo_ans, &requestToRead, sizeof(requestToRead));
   }
-
+  write(fifo_ans, &requestToRead, sizeof(requestToRead));
 }
 
 
@@ -71,6 +71,9 @@ int main(int argc, char const *argv[]) {
       }
     }
 
+    pthread_t requestThread;
+
+
     //create & initialize semaphore
     sem = sem_open(SEM_NAME,O_CREAT,0600,totalSeats);
 
@@ -80,7 +83,8 @@ int main(int argc, char const *argv[]) {
     int n;
     do {
         n = read(fifo_req,&requestToRead, sizeof(requestToRead));
-        write(fifo_ans, &answer, sizeof(answer));
+        pthread_create(&requestThread, NULL, handleRequest, &requestToRead);
+        pthread_join(requestThread, NULL);
 
     } while (n > 0);
 
