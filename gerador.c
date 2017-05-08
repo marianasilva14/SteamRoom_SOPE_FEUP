@@ -16,7 +16,6 @@ typedef enum stateofrequest {PEDIDO, ACEITE, REJEITADO, DESCARTADO} StateOfReque
 
 typedef struct{
     char fifo_name[100]; // fifo_to_answer
-    //TODO: complete with data for request
     int requestID;
     char gender;
     int requestTime;
