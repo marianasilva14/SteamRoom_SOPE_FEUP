@@ -104,6 +104,7 @@ void * handleRejected(void * missResponse){
   Request rejected;
   while (missResponse > 0){
     read(fifo_ans, &rejected, sizeof(rejected));
+    missResponse--;
     if(rejected.state == REJEITADO)
     {
       pthread_mutex_lock(&mut);
@@ -121,6 +122,7 @@ void * handleRejected(void * missResponse){
       else{
         rejectedQueue[queueIndex++] = rejected;
         requestRejected++;
+        missResponse++;
         printRegistrationMessages(rejected);
       }
       pthread_mutex_unlock(&mut);
