@@ -35,6 +35,33 @@ int generatedRequests[2] = {0};// M-0, F-1
 int rejectionsReceived[2] = {0};
 int discardedRejections[2] = {0};
 
+void printRegistrationMessages(Request r1){
+  pid_t pid = getpid();
+  char *location = NULL;
+  sprintf(location,"/tmp/ger.%d",pid);
+  FILE *f = fopen(location, "w");
+  if (f == NULL)
+  {
+    printf("Error opening file!\n");
+    exit(1);
+  }
+  time_t raw_time;
+  time(&raw_time);
+
+  char tip[10];
+  switch (r1.state){
+    case PEDIDO:
+    strcpy(tip,"PEDIDO");
+    break;
+    case REJEITADO:
+    strcpy(tip,"REJEITADO");
+    break;
+    case DESCARTADO:
+    strcpy(tip,"DESCARTADO");
+  }
+  fprintf(f,"%lu -%d -%d : %c -%d %s", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
+}
+
 //------------------------------------------------------------------------------------------------------//
 //args[0] = n Pedidos
 //args[1] = maxUtilizationTime
@@ -87,6 +114,8 @@ void * generateRequests(void * args){
     }
     sleep(1);
   } while(nPedidos > 0);
+
+  return NULL;
 }
 
 //------------------------------------------------------------------------------------------------------//
@@ -128,6 +157,8 @@ void * handleRejected(void * missResponse){
       pthread_mutex_unlock(&mut);
     }
   }
+
+  return NULL;
 }
 
 void printStatus(){
@@ -138,33 +169,6 @@ void printStatus(){
   printf("Rejeicoes Recebidas: Total- %d, M- %d, F- %d\n",totalRejections,rejectionsReceived[0],rejectionsReceived[1]);
   printf("Rejeicoes Descartadas: Total- %d, M- %d, F- %d\n",totalDiscarded,discardedRejections[0],discardedRejections[1]);
 
-}
-
-void printRegistrationMessages(Request r1){
-  pid_t pid = getpid();
-  char *location;
-  sprintf(location,"/tmp/ger.%d",pid);
-  FILE *f = fopen(location, "w");
-  if (f == NULL)
-  {
-    printf("Error opening file!\n");
-    exit(1);
-  }
-  time_t raw_time;
-  time(&raw_time);
-
-  char tip[10];
-  switch (r1.state){
-    case PEDIDO:
-    strcpy(tip,"PEDIDO");
-    break;
-    case REJEITADO:
-    strcpy(tip,"REJEITADO");
-    break;
-    case DESCARTADO:
-    strcpy(tip,"DESCARTADO");
-  }
-  fprintf(f,"%lu -%d -%d : %c -%d %s", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
 }
 
 int main(int argc, char const *argv[]) {
