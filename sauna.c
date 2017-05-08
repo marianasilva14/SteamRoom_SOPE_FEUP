@@ -50,7 +50,7 @@ void printRegistrationMessages(Request r1){
 	pid_t pid = getpid();
 	char location[100];
 	sprintf(location,"/tmp/bal.%d",pid);
-	FILE *f = fopen(location, "w+");
+	FILE *f = fopen(location, "a");
 	if (f == NULL)
 	{
 		printf("Error opening file!\n");
@@ -69,8 +69,10 @@ void printRegistrationMessages(Request r1){
 		break;
 	case ACEITE:
 		strcpy(tip,"SERVIDO");
+		break;
 	}
-	fprintf(f,"%lu -%d -%d : %c -%d %s", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
+	fprintf(f,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
+	fclose(f);
 }
 
 
@@ -90,23 +92,27 @@ void* handleRequest(void * args){
 	while ((fifo_ans = open(requestToRead.fifo_name,O_WRONLY))==-1){
 		printf("Sauna: Error opening fifo awnser\n");
 		sleep(1);
+		return NULL;
 	}
-	if (actualGender == 'N' || requestToRead.gender == actualGender){
-		//Accept Request
-		requestToRead.state = ACEITE;
-    actualGender = requestToRead.gender;
 
+	if (actualGender == 'N' || requestToRead.gender == actualGender){
+
+		sem_wait(sem); //decrements Semaphore
+		gettimeofday(&tvBegin, NULL);
+		requestToRead.state = ACEITE;
+		if (actualGender == 'N'){
+			actualGender = requestToRead.gender;
+		}
 		if (requestToRead.gender == 'M'){
 			requestsServed[0]++;
 		}else{
 			requestsServed[1]++;
 		}
-		sem_wait(sem); //decrements Semaphore
-    gettimeofday(&tvBegin, NULL);
     do{
       gettimeofday(&tvEnd, NULL);
       timeval_subtract(&tvDiff, &tvEnd, &tvBegin);
       elapsedMiliseconds = tvDiff.tv_sec * 1000 + tvDiff.tv_usec/1000.0;
+			sleep(0.001);
     } while(elapsedMiliseconds < requestToRead.requestTime);
     sem_post(sem);
     int semValue;
@@ -114,6 +120,7 @@ void* handleRequest(void * args){
       perror("Error Reading Semaphore Value\n");
     }else{
       if (semValue == totalSeats){
+				printf("Romm Clear\n");
         actualGender = 'N';
       }
     }
@@ -121,6 +128,7 @@ void* handleRequest(void * args){
 	else{
 		//Reject the Request
 		requestToRead.state = REJEITADO;
+		printf("Sauna: Rejecting Request\n");
 
 		if (requestToRead.gender == 'M'){
 			rejectionsReceived[0]++;
@@ -137,7 +145,9 @@ void* handleRequest(void * args){
 
 	printRegistrationMessages(requestToRead);
 
-	write(fifo_ans, &requestToRead, sizeof(requestToRead));
+	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) <= 0){
+		printf("Nothing to write\n");
+	}
   return NULL;
 }
 
@@ -171,17 +181,16 @@ int main(int argc, char const *argv[]) {
 	sem = sem_open(SEM_NAME,O_CREAT,0600,totalSeats);
 
 	Request requestToRead;
-
-	int n;
-	do {
-		n = read(fifo_req,&requestToRead, sizeof(requestToRead));
+	int n = 1;
+	while(n>0){
+		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
 		pthread_create(&requestThread, NULL, handleRequest, &requestToRead);
 		pthread_join(requestThread, NULL);
+	}
 
-	} while (n > 0);
   sem_destroy(sem);
-
 	printStatus();
+	unlink(fifo_entrada);
 
 	return 0;
 }

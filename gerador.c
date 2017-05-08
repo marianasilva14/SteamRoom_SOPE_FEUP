@@ -76,14 +76,15 @@ void * generateRequests(void * args){
     triesToOpenFifo++;
     if (triesToOpenFifo > 5){
       printf("Failed to Open Fifo Req\n");
-      //exit(1);
+      return NULL;
     }
   }
-  printf("Generating Request\n");
+
   int maxUtilizationTime = *(int*) args;
   int i = 0;
   Request request;
   do {
+    printf("Generating Request\n");
     if(requestRejected > 0){
       pthread_mutex_lock(&mut);
       request = rejectedQueue[queueIndex - requestRejected--];
@@ -103,12 +104,10 @@ void * generateRequests(void * args){
       request.tries = 1;
     }
     request.state = PEDIDO;
-    printf("Going to Lock\n");
     pthread_mutex_lock(&mut);
     nPedidos--;
     pthread_mutex_unlock(&mut);
     write(fifo_req, &request, sizeof(request));
-    printf("Writing on fifo request\n");
     printRegistrationMessages(request);
     if (request.gender == 'M'){
       generatedRequests[0]++;
@@ -138,7 +137,6 @@ void * handleRejected(void * args){
   printf("Debug1\n");
   Request rejected;
   while (missResponse > 0){
-    printf("Reading from fifo rejected\n");
     read(fifo_ans, &rejected, sizeof(rejected));
     missResponse--;
     if(rejected.state == REJEITADO)
@@ -162,8 +160,9 @@ void * handleRejected(void * args){
 
       }
       pthread_mutex_unlock(&mut);
+      printRegistrationMessages(rejected);
     }
-    printRegistrationMessages(rejected);
+
     printf("Miss Response=%d\n",missResponse);
   }
   printf("Closing fifo ans\n");
@@ -209,7 +208,7 @@ int main(int argc, char const *argv[]) {
   printf("Debug 7\n");
   printStatus();
   printf("Debug 8\n");
-
+  unlink(fifo_dir);
 
   return 0;
 }
