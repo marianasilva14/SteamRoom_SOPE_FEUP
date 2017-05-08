@@ -5,8 +5,11 @@
 #include <fcntl.h>
 #include <semaphore.h>
 #include <sys/mman.h>
-
-
+#include <sys/time.h>
+#include <stdlib.h>
+#include <time.h>
+#include <string.h>
+#include <pthread.h>
 
 #define fifo_entrada "/tmp/entrada"
 
@@ -31,6 +34,44 @@ int requestRejected = 0;
 int requestsReceived[2] = {0};// M-0, F-1
 int rejectionsReceived[2] = {0};
 int requestsServed[2] = {0};
+
+
+void printStatus(){
+	int totalReceived = requestsReceived[0] + requestsReceived[1];
+	int totalRejections = rejectionsReceived[0] + rejectionsReceived[1];
+	int totalServed = requestsServed[0] + requestsServed[1];
+	printf("Pedidos Recebidos: Total- %d, M- %d, F- %d\n",totalReceived,requestsReceived[0],requestsReceived[1]);
+	printf("Rejeicoes: Total- %d, M- %d, F- %d\n",totalRejections,rejectionsReceived[0],rejectionsReceived[1]);
+	printf("Pedidos servidos: Total- %d, M- %d, F- %d\n",totalServed,requestsServed[0],requestsServed[1]);
+
+}
+
+void printRegistrationMessages(Request r1){
+	pid_t pid = getpid();
+	char location[100];
+	sprintf(location,"/tmp/bal.%d",pid);
+	FILE *f = fopen(location, "w");
+	if (f == NULL)
+	{
+		printf("Error opening file!\n");
+		exit(1);
+	}
+	time_t raw_time;
+	time(&raw_time);
+
+	char tip[10];
+	switch (r1.state){
+	case PEDIDO:
+		strcpy(tip,"RECEBIDO");
+		break;
+	case REJEITADO:
+		strcpy(tip,"REJEITADO");
+		break;
+	case ACEITE:
+		strcpy(tip,"SERVIDO");
+	}
+	fprintf(f,"%lu -%d -%d : %c -%d %s", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
+}
 
 
 void timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1)
@@ -93,47 +134,13 @@ void* handleRequest(void * args){
 		requestsReceived[1]++;
 	}
 
-	printRegistrationMessages(&requestToRead);
+	printRegistrationMessages(requestToRead);
 
 	write(fifo_ans, &requestToRead, sizeof(requestToRead));
+  return NULL;
 }
 
-void printStatus(){
-	int totalReceived = requestsReceived[0] + requestsReceived[1];
-	int totalRejections = rejectionsReceived[0] + rejectionsReceived[1];
-	int totalServed = requestsServed[0] + requestsServed[1];
-	printf("Pedidos Recebidos: Total- %d, M- %d, F- %d\n",totalReceived,requestsReceived[0],requestsReceived[1]);
-	printf("Rejeicoes: Total- %d, M- %d, F- %d\n",totalRejections,rejectionsReceived[0],rejectionsReceived[1]);
-	printf("Pedidos servidos: Total- %d, M- %d, F- %d\n",totalServed,requestsServed[0],requestsServed[1]);
 
-}
-
-void printRegistrationMessages(Request r1){
-	pid_t pid = getpid();
-	char *location;
-	sprintf(location,"/tmp/bal.%d",pid);
-	FILE *f = fopen(location, "w");
-	if (f == NULL)
-	{
-		printf("Error opening file!\n");
-		exit(1);
-	}
-	time_t raw_time;
-	time(&raw_time);
-
-	char tip[10];
-	switch (r1.state){
-	case PEDIDO:
-		strcpy(tip,"RECEBIDO");
-		break;
-	case REJEITADO:
-		strcpy(tip,"REJEITADO");
-		break;
-	case ACEITE:
-		strcpy(tip,"SERVIDO");
-	}
-	fprintf(f,"%lu -%d -%d : %c -%d %s", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
-}
 
 
 int main(int argc, char const *argv[]) {
@@ -142,7 +149,7 @@ int main(int argc, char const *argv[]) {
 		printf("Usage: sauna <n_lugares>\n");
 		return 1;
 	}
-	totalSeats = argv[1];
+  sscanf(argv[1], "%d", &totalSeats);
 	mkfifo(fifo_entrada, 0660);
 
 	int fifo_req;
@@ -163,7 +170,6 @@ int main(int argc, char const *argv[]) {
 	sem = sem_open(SEM_NAME,O_CREAT,0600,totalSeats);
 
 	Request requestToRead;
-	Request answer;
 
 	int n;
 	do {
@@ -172,7 +178,7 @@ int main(int argc, char const *argv[]) {
 		pthread_join(requestThread, NULL);
 
 	} while (n > 0);
-  sem_destroy(&sem);
+  sem_destroy(sem);
 
 	printStatus();
 
