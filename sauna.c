@@ -5,6 +5,10 @@
 #include <fcntl.h>
 
 #define fifo_entrada "/tmp/entrada"
+//Global Variables
+int freeSeats;
+
+
 
 typedef struct{
     char fifo_name[100]; // fifo_to_answer
@@ -17,14 +21,22 @@ typedef struct{
 
 int main(int argc, char const *argv[]) {
     /* code */
+    if (argc != 2){
+      printf("Usage: sauna <n_lugares>\n");
+      return 1;
+    }
+    freeSeats = argv[1];
     mkfifo(fifo_entrada, 0660);
 
     int fifo_req, fifo_ans;
-    //TODO: Restruct do while()
-    do {
-        fifo_req=open(fifo_entrada,O_RDWR);
-        if (fifo_req == -1) sleep(1);
-    } while(fifo_req == -1);
+    while((fifo_req=open(fifo_entrada,O_WRONLY))==-1){
+      sleep(1);
+      triesToOpenFifo++;
+      if (triesToOpenFifo > 5){
+        printf("Failed to Open Fifo Request\n");
+        //exit(1);
+      }
+    }
 
     Request requestToRead;
     Answer answer;

@@ -48,7 +48,7 @@ void * generateRequests(void * args){
     sleep(1);
     triesToOpenFifo++;
     if (triesToOpenFifo > 5){
-      printf("Cannot Open Fifo Req\n");
+      printf("Failed to Open Fifo Req\n");
       //exit(1);
     }
   }
@@ -98,7 +98,7 @@ void * handleRejected(void * missResponse){
     sleep(1);
     triesToOpenFifo++;
     if (triesToOpenFifo > 5){
-      printf("Cannot Open Fifo Req\n");
+      printf("Failed to Open Fifo Rejected\n");
     }
   }
 
