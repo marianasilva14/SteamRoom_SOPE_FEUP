@@ -50,7 +50,7 @@ void printRegistrationMessages(Request r1){
 	pid_t pid = getpid();
 	char location[100];
 	sprintf(location,"/tmp/bal.%d",pid);
-	FILE *f = fopen(location, "w");
+	FILE *f = fopen(location, "w+");
 	if (f == NULL)
 	{
 		printf("Error opening file!\n");
@@ -94,6 +94,7 @@ void* handleRequest(void * args){
 	if (actualGender == 'N' || requestToRead.gender == actualGender){
 		//Accept Request
 		requestToRead.state = ACEITE;
+    actualGender = requestToRead.gender;
 
 		if (requestToRead.gender == 'M'){
 			requestsServed[0]++;
