@@ -43,7 +43,9 @@ void timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval
 
 void* handleRequest(void * args){
 	int fifo_ans;
-	Request requestToRead = *(Request*) args[0];
+  struct timeval tvBegin, tvEnd, tvDiff;
+  int elapsedMiliseconds;
+	Request requestToRead = *(Request*) args;
 	while ((fifo_ans = open(requestToRead.fifo_name,O_WRONLY))==-1){
 		printf("Sauna: Error opening fifo awnser\n");
 		sleep(1);
@@ -118,21 +120,6 @@ void printRegistrationMessages(Request r1){
 	}
 	time_t raw_time;
 	time(&raw_time);
-  int fifo_ans;
-  struct timeval tvBegin, tvEnd, tvDiff;
-  int elapsedMiliseconds;
-  Request requestToRead = *(Request*) args[0];
-  while ((fifo_ans = open(requestToRead.fifo_name,O_WRONLY))==-1){
-    printf("Sauna: Error opening fifo awnser\n");
-    sleep(1);
-  }
-  if (actualGender == 'N' || requestToRead.gender == actualGender){
-    //Accept Request
-	  requestToRead.state = ACEITE;
-    if (actualGender == 'N'){
-      actualGender = requestToRead.gender;
-    }
-    sem_wait(sem); //decrements Semaphore
 
 	char tip[10];
 	switch (r1.state){
@@ -186,7 +173,7 @@ int main(int argc, char const *argv[]) {
 
 	} while (n > 0);
   sem_destroy(&sem);
-  
+
 	printStatus();
 
 	return 0;
