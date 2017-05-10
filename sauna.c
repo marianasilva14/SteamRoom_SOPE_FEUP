@@ -34,7 +34,8 @@ int requestRejected = 0;
 int requestsReceived[2] = {0};// M-0, F-1
 int rejectionsReceived[2] = {0};
 int requestsServed[2] = {0};
-pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t genderMtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t arraysMtx = PTHREAD_MUTEX_INITIALIZER;
 
 
 void printStatus(){
@@ -105,16 +106,19 @@ void* handleRequest(void * args){
 		else{
 			gettimeofday(&tvBegin, NULL);
 			requestToRead.state = ACEITE;
-			pthread_mutex_lock(&mut);
+			pthread_mutex_lock(&genderMtx);
 			if (actualGender == 'N'){
 				actualGender = requestToRead.gender;
 			}
+			pthread_mutex_unlock(&genderMtx);
+
+			pthread_mutex_lock(&arraysMtx);
 			if (requestToRead.gender == 'M'){
 				requestsServed[0]++;
 			}else{
 				requestsServed[1]++;
 			}
-			pthread_mutex_unlock(&mut);
+			pthread_mutex_unlock(&arraysMtx);
 			printf("Resting in Sauna, SEX:%c\n",requestToRead.gender);
 	    do{
 	      gettimeofday(&tvEnd, NULL);
@@ -129,9 +133,9 @@ void* handleRequest(void * args){
       perror("Error Reading Semaphore Value\n");
     }else{
       if (semValue == totalSeats){
-				pthread_mutex_lock(&mut);
+				pthread_mutex_lock(&genderMtx);
         actualGender = 'N';
-				pthread_mutex_unlock(&mut);
+				pthread_mutex_unlock(&genderMtx);
       }
     }
 	}
@@ -139,21 +143,21 @@ void* handleRequest(void * args){
 		//Reject the Request
 		requestToRead.state = REJEITADO;
 		printf("Sauna: Rejecting Request, SEX:%c\n",requestToRead.gender);
-		pthread_mutex_lock(&mut);
+		pthread_mutex_lock(&arraysMtx);
 		if (requestToRead.gender == 'M'){
 			rejectionsReceived[0]++;
 		}else{
 			rejectionsReceived[1]++;
 		}
-		pthread_mutex_unlock(&mut);
+		pthread_mutex_unlock(&arraysMtx);
 	}
-	pthread_mutex_lock(&mut);
+	pthread_mutex_lock(&arraysMtx);
 	if (requestToRead.gender == 'M'){
 		requestsReceived[0]++;
 	}else{
 		requestsReceived[1]++;
 	}
-	pthread_mutex_unlock(&mut);
+	pthread_mutex_unlock(&arraysMtx);
 
 	printRegistrationMessages(requestToRead);
 
@@ -177,7 +181,10 @@ int main(int argc, char const *argv[]) {
   sscanf(argv[1], "%d", &totalSeats);
 	printf("Total Seats available = %d\n",totalSeats);
 	//create & initialize semaphore
-	sem = sem_open(SEM_NAME,O_CREAT);
+	if ( (sem = sem_open(SEM_NAME,O_CREAT,0660,totalSeats)) == SEM_FAILED){
+		perror("Error opening Semaphore\n");
+		return 2;
+	}
 	if (sem_init(sem,0,totalSeats)==-1){
 		perror("sem_init()\n");
 	}
@@ -197,13 +204,10 @@ int main(int argc, char const *argv[]) {
 		}
 	}
 
-	int numThreads = 40;
+	int numThreads = totalSeats;
 	int threadIterator = 0;
 	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads);
 	printf("Allocated initial threads\n");
-
-
-
 
 	Request requestToRead;
 	int n = 1;
@@ -212,7 +216,7 @@ int main(int argc, char const *argv[]) {
 		if (threadIterator >= numThreads && n>0){
 			printf("Going to Reallocate Memory\n");
 			numThreads = numThreads * 2;
-			if ( (requestThreads = realloc(requestThreads,numThreads)) == NULL){
+			if ( (requestThreads = realloc(requestThreads,numThreads * sizeof(pthread_t))) == NULL){
 				perror("Error Reallocating Memory for threads\n");
 			}
 			else{
@@ -230,18 +234,14 @@ int main(int argc, char const *argv[]) {
 		pthread_join(requestThreads[i], NULL);
 		printf("Joined Thread %d\n",i);
 	}
-
+	printf("Freeing array of threads\n");
+	free(requestThreads);
 	printf("Destroying Semaphore\n");
 	sem_destroy(sem);
 	printf("Semaphore Destroyed\n");
-	printStatus();
-	printf("Printed Status\n");
 	unlink(fifo_entrada);
 	printf("Destryoed FIFO\n");
-
-
-
-
+	printStatus();
 
 	return 0;
 }
