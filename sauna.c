@@ -86,6 +86,16 @@ void timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval
 
 }
 
+int checkGender(char requestGender){
+	int returnVal = 0;
+	pthread_mutex_lock(&genderMtx);
+	if (actualGender == 'N' || requestGender == actualGender){
+		returnVal = 1;
+	}
+	pthread_mutex_unlock(&genderMtx);
+	return returnVal;
+}
+
 void* handleRequest(void * args){
 	int fifo_ans;
   struct timeval tvBegin, tvEnd, tvDiff;
@@ -97,7 +107,7 @@ void* handleRequest(void * args){
 		sleep(1);
 		return NULL;
 	}
-	if (actualGender == 'N' || requestToRead.gender == actualGender){
+	if (checkGender(requestToRead.gender)){
 		printf("Sauna: Accepting Request, SEX:%c\n",requestToRead.gender);
 		sem_getvalue(sem, &semValue);
 		if (sem_wait(sem)==-1){
