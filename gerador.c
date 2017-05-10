@@ -114,7 +114,6 @@ void * generateRequests(void * args){
     }else{
       generatedRequests[1]++;
     }
-    sleep(1);
   } while(nPedidos > 0);
   printf("Debug 3\n");
 
