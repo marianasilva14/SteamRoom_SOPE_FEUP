@@ -203,16 +203,20 @@ int main(int argc, char const *argv[]) {
 	int n = 1;
 	while(n>0){
 		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
-		pthread_create(&requestThreads[threadIterator++], NULL, handleRequest, &requestToRead);
 		if (threadIterator >= numThreads){
 			numThreads = numThreads * 2;
 			if (realloc(requestThreads,numThreads) == NULL){
 				perror("Error Reallocating Memory for threads\n");
 			}
 		}
+		printf("Read new request\n");
+		pthread_create(&requestThreads[threadIterator++], NULL, handleRequest, &requestToRead);
+		printf("Created thread %d\n", threadIterator-1);
+
 	}
 	int i = 0;
 	for (; i < threadIterator;i++){
+		//printf("Joining thread %d\n",i);
 		pthread_join(requestThreads[i], NULL);
 	}
 
