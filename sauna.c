@@ -88,80 +88,82 @@ void timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval
 void* handleRequest(void * args){
 	int fifo_ans;
   struct timeval tvBegin, tvEnd, tvDiff;
-  int elapsedMiliseconds;
+  int elapsedMiliseconds = 0;
+	int semValue;
 	Request requestToRead = *(Request*) args;
 	while ((fifo_ans = open(requestToRead.fifo_name,O_WRONLY))==-1){
 		printf("Sauna: Error opening fifo awnser\n");
 		sleep(1);
 		return NULL;
 	}
-	pthread_mutex_lock(&mut);
 	if (actualGender == 'N' || requestToRead.gender == actualGender){
-		pthread_mutex_unlock(&mut);
-		printf("Sauna: Accepting Request\n");
-		sem_wait(sem); //decrements Semaphore
-		gettimeofday(&tvBegin, NULL);
-		requestToRead.state = ACEITE;
-		pthread_mutex_lock(&mut);
-		if (actualGender == 'N'){
-			actualGender = requestToRead.gender;
+		printf("Sauna: Accepting Request, SEX:%c\n",requestToRead.gender);
+		sem_getvalue(sem, &semValue);
+		printf("Sem Value=%d",semValue);
+		if (sem_wait(sem)==-1){
+			perror("sem_wait(sem)\n");
 		}
-		if (requestToRead.gender == 'M'){
-			requestsServed[0]++;
-		}else{
-			requestsServed[1]++;
+		else{
+			printf("Inside Semaphore\n");
+			gettimeofday(&tvBegin, NULL);
+			requestToRead.state = ACEITE;
+			//pthread_mutex_lock(&mut);
+			if (actualGender == 'N'){
+				actualGender = requestToRead.gender;
+			}
+			if (requestToRead.gender == 'M'){
+				requestsServed[0]++;
+			}else{
+				requestsServed[1]++;
+			}
+			//pthread_mutex_unlock(&mut);
+			printf("Resting in Sauna, SEX:%c\n",requestToRead.gender);
+	    do{
+	      gettimeofday(&tvEnd, NULL);
+	      timeval_subtract(&tvDiff, &tvEnd, &tvBegin);
+				usleep(1000);
+	      elapsedMiliseconds = tvDiff.tv_sec * 1000 + tvDiff.tv_usec/1000.0;
+	    } while(elapsedMiliseconds < requestToRead.requestTime);
+			printf("Rested in Sauna, SEX:%c\n",requestToRead.gender);
+	    sem_post(sem);
 		}
-		pthread_mutex_unlock(&mut);
-    do{
-      gettimeofday(&tvEnd, NULL);
-      timeval_subtract(&tvDiff, &tvEnd, &tvBegin);
-      elapsedMiliseconds = tvDiff.tv_sec * 1000 + tvDiff.tv_usec/1000.0;
 
-    } while(elapsedMiliseconds < requestToRead.requestTime);
-
-    sem_post(sem);
-    int semValue;
     if (sem_getvalue(sem, &semValue) == -1){
       perror("Error Reading Semaphore Value\n");
     }else{
-			printf("Debug Sauna 1: Sem Value=%d\n",semValue);
       if (semValue == totalSeats){
-				pthread_mutex_lock(&mut);
+				//pthread_mutex_lock(&mut);
         actualGender = 'N';
-				pthread_mutex_unlock(&mut);
+				//pthread_mutex_unlock(&mut);
       }
     }
 	}
 	else{
 		//Reject the Request
 		requestToRead.state = REJEITADO;
-		printf("Sauna: Rejecting Request\n");
-
+		printf("Sauna: Rejecting Request, SEX:%c\n",requestToRead.gender);
+		//pthread_mutex_lock(&mut);
 		if (requestToRead.gender == 'M'){
-			pthread_mutex_lock(&mut);
 			rejectionsReceived[0]++;
-			pthread_mutex_unlock(&mut);
 		}else{
-			pthread_mutex_lock(&mut);
 			rejectionsReceived[1]++;
-			pthread_mutex_unlock(&mut);
 		}
+		//pthread_mutex_unlock(&mut);
 	}
-
+	//pthread_mutex_lock(&mut);
 	if (requestToRead.gender == 'M'){
-		pthread_mutex_lock(&mut);
 		requestsReceived[0]++;
-		pthread_mutex_unlock(&mut);
 	}else{
-		pthread_mutex_lock(&mut);
 		requestsReceived[1]++;
-		pthread_mutex_unlock(&mut);
 	}
+	//pthread_mutex_unlock(&mut);
 
 	printRegistrationMessages(requestToRead);
 
-	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) <= 0){
-		printf("Nothing to write\n");
+	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) == -1){
+		perror("Writing Awnser Error\n");
+	}else{
+		printf("Sent info back to generator\n");
 	}
   return NULL;
 }
@@ -176,6 +178,15 @@ int main(int argc, char const *argv[]) {
 		return 1;
 	}
   sscanf(argv[1], "%d", &totalSeats);
+	printf("Total Seats available = %d\n",totalSeats);
+	//create & initialize semaphore
+	sem = sem_open(SEM_NAME,O_CREAT);
+	if (sem_init(sem,0,totalSeats)==-1){
+		perror("sem_init()\n");
+	}
+	int tempSemValue;
+	sem_getvalue(sem, &tempSemValue);
+	printf("in Main Sem Value=%d\n",tempSemValue);
 	mkfifo(fifo_entrada, 0660);
 
 	int fifo_req;
@@ -189,40 +200,51 @@ int main(int argc, char const *argv[]) {
 		}
 	}
 
-	pthread_t *requestThreads;
 	int numThreads = 10;
 	int threadIterator = 0;
-	requestThreads = malloc(sizeof(pthread_t)*numThreads);
+	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads);
 	printf("Allocated initial threads\n");
 
 
-	//create & initialize semaphore
-	sem = sem_open(SEM_NAME,O_CREAT,0600,totalSeats);
+
 
 	Request requestToRead;
 	int n = 1;
 	while(n>0){
 		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
 		if (threadIterator >= numThreads){
+			printf("Going to Reallocate Memory\n");
 			numThreads = numThreads * 2;
-			if (realloc(requestThreads,numThreads) == NULL){
+			if ( (requestThreads = realloc(requestThreads,numThreads)) == NULL){
 				perror("Error Reallocating Memory for threads\n");
+			}
+			else{
+				printf("Memory Reallocated\n");
 			}
 		}
 		printf("Read new request\n");
 		pthread_create(&requestThreads[threadIterator++], NULL, handleRequest, &requestToRead);
 		printf("Created thread %d\n", threadIterator-1);
-
 	}
+
 	int i = 0;
 	for (; i < threadIterator;i++){
-		//printf("Joining thread %d\n",i);
+		printf("Joining thread %d\n",i);
 		pthread_join(requestThreads[i], NULL);
+		printf("Joined Thread %d\n",i);
 	}
 
-  sem_destroy(sem);
+	printf("Destroying Semaphore\n");
+	sem_destroy(sem);
+	printf("Semaphore Destroyed\n");
 	printStatus();
+	printf("Printed Status\n");
 	unlink(fifo_entrada);
+	printf("Destryoed FIFO\n");
+
+
+
+
 
 	return 0;
 }
