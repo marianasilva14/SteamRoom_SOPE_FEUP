@@ -99,15 +99,13 @@ void* handleRequest(void * args){
 	if (actualGender == 'N' || requestToRead.gender == actualGender){
 		printf("Sauna: Accepting Request, SEX:%c\n",requestToRead.gender);
 		sem_getvalue(sem, &semValue);
-		printf("Sem Value=%d",semValue);
 		if (sem_wait(sem)==-1){
 			perror("sem_wait(sem)\n");
 		}
 		else{
-			printf("Inside Semaphore\n");
 			gettimeofday(&tvBegin, NULL);
 			requestToRead.state = ACEITE;
-			//pthread_mutex_lock(&mut);
+			pthread_mutex_lock(&mut);
 			if (actualGender == 'N'){
 				actualGender = requestToRead.gender;
 			}
@@ -116,12 +114,11 @@ void* handleRequest(void * args){
 			}else{
 				requestsServed[1]++;
 			}
-			//pthread_mutex_unlock(&mut);
+			pthread_mutex_unlock(&mut);
 			printf("Resting in Sauna, SEX:%c\n",requestToRead.gender);
 	    do{
 	      gettimeofday(&tvEnd, NULL);
 	      timeval_subtract(&tvDiff, &tvEnd, &tvBegin);
-				usleep(1000);
 	      elapsedMiliseconds = tvDiff.tv_sec * 1000 + tvDiff.tv_usec/1000.0;
 	    } while(elapsedMiliseconds < requestToRead.requestTime);
 			printf("Rested in Sauna, SEX:%c\n",requestToRead.gender);
@@ -132,9 +129,9 @@ void* handleRequest(void * args){
       perror("Error Reading Semaphore Value\n");
     }else{
       if (semValue == totalSeats){
-				//pthread_mutex_lock(&mut);
+				pthread_mutex_lock(&mut);
         actualGender = 'N';
-				//pthread_mutex_unlock(&mut);
+				pthread_mutex_unlock(&mut);
       }
     }
 	}
@@ -142,21 +139,21 @@ void* handleRequest(void * args){
 		//Reject the Request
 		requestToRead.state = REJEITADO;
 		printf("Sauna: Rejecting Request, SEX:%c\n",requestToRead.gender);
-		//pthread_mutex_lock(&mut);
+		pthread_mutex_lock(&mut);
 		if (requestToRead.gender == 'M'){
 			rejectionsReceived[0]++;
 		}else{
 			rejectionsReceived[1]++;
 		}
-		//pthread_mutex_unlock(&mut);
+		pthread_mutex_unlock(&mut);
 	}
-	//pthread_mutex_lock(&mut);
+	pthread_mutex_lock(&mut);
 	if (requestToRead.gender == 'M'){
 		requestsReceived[0]++;
 	}else{
 		requestsReceived[1]++;
 	}
-	//pthread_mutex_unlock(&mut);
+	pthread_mutex_unlock(&mut);
 
 	printRegistrationMessages(requestToRead);
 
@@ -200,7 +197,7 @@ int main(int argc, char const *argv[]) {
 		}
 	}
 
-	int numThreads = 10;
+	int numThreads = 40;
 	int threadIterator = 0;
 	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads);
 	printf("Allocated initial threads\n");
@@ -212,7 +209,7 @@ int main(int argc, char const *argv[]) {
 	int n = 1;
 	while(n>0){
 		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
-		if (threadIterator >= numThreads){
+		if (threadIterator >= numThreads && n>0){
 			printf("Going to Reallocate Memory\n");
 			numThreads = numThreads * 2;
 			if ( (requestThreads = realloc(requestThreads,numThreads)) == NULL){
