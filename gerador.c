@@ -59,6 +59,8 @@ void printRegistrationMessages(Request r1){
     break;
     case DESCARTADO:
     strcpy(tip,"DESCARTADO");
+    default:
+    break;
   }
   if (fprintf(f,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip)<=0){
     perror("Error writing to file\n");
@@ -101,7 +103,7 @@ void * generateRequests(void * args){
   while(isStillProcessing()){
     printf("Pedidos Originais Gerados = %d\n",originalGeneratedPedidos );
     printf("Miss Response Value=%d\n",missResponse);
-    sleep(1);
+    //sleep(1);
     if(queueIndex > 0){
       nPedidos++;
       pthread_mutex_lock(&queueMtx);
@@ -125,7 +127,7 @@ void * generateRequests(void * args){
         request.tries = 1;
       }
     }
-    if (nPedidos > 0 || end){
+    if (nPedidos > 0){
       printf("Generating Request\n");
       nPedidos--;
       request.state = PEDIDO;
@@ -149,7 +151,7 @@ void * handleRejected(void * args){
   int fifo_ans;
   printf("Fifo Dir %s\n", fifo_dir);
   while((fifo_ans=open(fifo_dir,O_RDONLY))==-1){
-    sleep(1);
+    //sleep(1);
     triesToOpenFifo++;
     if (triesToOpenFifo > 5){
       printf("Failed to Open Fifo Rejected\n");

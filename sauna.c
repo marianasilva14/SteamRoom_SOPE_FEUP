@@ -72,6 +72,8 @@ void printRegistrationMessages(Request r1){
 	case ACEITE:
 		strcpy(tip,"SERVIDO");
 		break;
+    default:
+    break;
 	}
 	fprintf(f,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
 	fclose(f);
