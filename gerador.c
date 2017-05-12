@@ -101,7 +101,7 @@ void * generateRequests(void * args){
   while(isStillProcessing()){
     printf("Pedidos Originais Gerados = %d\n",originalGeneratedPedidos );
     printf("Miss Response Value=%d\n",missResponse);
-    sleep(1);
+    //usleep(100000);
     if(queueIndex > 0){
       nPedidos++;
       pthread_mutex_lock(&queueMtx);
@@ -123,19 +123,20 @@ void * generateRequests(void * args){
         request.gender = randomNumber == 0 ? 'M' : 'F';
         request.requestTime = (rand() % maxUtilizationTime) + 1;
         request.tries = 1;
+        if (request.gender == 'M'){
+          generatedRequests[0]++;
+        }else{
+          generatedRequests[1]++;
+        }
       }
     }
-    if (nPedidos > 0 || end){
+    if (nPedidos > 0){
       printf("Generating Request\n");
       nPedidos--;
       request.state = PEDIDO;
       write(fifo_req, &request, sizeof(request));
       printRegistrationMessages(request);
-      if (request.gender == 'M'){
-        generatedRequests[0]++;
-      }else{
-        generatedRequests[1]++;
-      }
+
     }
   }
   printf("Debug 3\n");

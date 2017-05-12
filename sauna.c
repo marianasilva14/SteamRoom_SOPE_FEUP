@@ -39,12 +39,14 @@ pthread_mutex_t arraysMtx = PTHREAD_MUTEX_INITIALIZER;
 
 
 void printStatus(){
+	pthread_mutex_lock(&arraysMtx);
 	int totalReceived = requestsReceived[0] + requestsReceived[1];
 	int totalRejections = rejectionsReceived[0] + rejectionsReceived[1];
 	int totalServed = requestsServed[0] + requestsServed[1];
 	printf("Pedidos Recebidos: Total- %d, M- %d, F- %d\n",totalReceived,requestsReceived[0],requestsReceived[1]);
 	printf("Rejeicoes: Total- %d, M- %d, F- %d\n",totalRejections,rejectionsReceived[0],rejectionsReceived[1]);
 	printf("Pedidos servidos: Total- %d, M- %d, F- %d\n",totalServed,requestsServed[0],requestsServed[1]);
+	pthread_mutex_unlock(&arraysMtx);
 
 }
 
@@ -102,11 +104,27 @@ void* handleRequest(void * args){
   int elapsedMiliseconds = 0;
 	int semValue;
 	Request requestToRead = *(Request*) args;
+	int numTries = 0;
 	while ((fifo_ans = open(requestToRead.fifo_name,O_WRONLY))==-1){
-		printf("Sauna: Error opening fifo awnser\n");
+		numTries++;
+		printf("Sauna: Error opening fifo awnser, try number %d\n",numTries);
 		sleep(1);
-		return NULL;
+		if (numTries > 4){
+			return NULL;
+		}
+
 	}
+
+	if (requestToRead.gender == 'M'){
+		pthread_mutex_lock(&arraysMtx);
+		requestsReceived[0]++;
+		pthread_mutex_unlock(&arraysMtx);
+	}else{
+		pthread_mutex_lock(&arraysMtx);
+		requestsReceived[1]++;
+		pthread_mutex_unlock(&arraysMtx);
+	}
+
 	if (checkGender(requestToRead.gender)){
 		printf("Sauna: Accepting Request, SEX:%c\n",requestToRead.gender);
 		sem_getvalue(sem, &semValue);
@@ -122,13 +140,17 @@ void* handleRequest(void * args){
 			}
 			pthread_mutex_unlock(&genderMtx);
 
-			pthread_mutex_lock(&arraysMtx);
+
 			if (requestToRead.gender == 'M'){
+				pthread_mutex_lock(&arraysMtx);
 				requestsServed[0]++;
+				pthread_mutex_unlock(&arraysMtx);
 			}else{
+				pthread_mutex_lock(&arraysMtx);
 				requestsServed[1]++;
+				pthread_mutex_unlock(&arraysMtx);
 			}
-			pthread_mutex_unlock(&arraysMtx);
+
 			printf("Resting in Sauna, SEX:%c\n",requestToRead.gender);
 	    do{
 	      gettimeofday(&tvEnd, NULL);
@@ -153,21 +175,21 @@ void* handleRequest(void * args){
 		//Reject the Request
 		requestToRead.state = REJEITADO;
 		printf("Sauna: Rejecting Request, SEX:%c\n",requestToRead.gender);
-		pthread_mutex_lock(&arraysMtx);
+
 		if (requestToRead.gender == 'M'){
+			pthread_mutex_lock(&arraysMtx);
 			rejectionsReceived[0]++;
+			pthread_mutex_unlock(&arraysMtx);
 		}else{
+			pthread_mutex_lock(&arraysMtx);
 			rejectionsReceived[1]++;
+			pthread_mutex_unlock(&arraysMtx);
 		}
-		pthread_mutex_unlock(&arraysMtx);
+
 	}
-	pthread_mutex_lock(&arraysMtx);
-	if (requestToRead.gender == 'M'){
-		requestsReceived[0]++;
-	}else{
-		requestsReceived[1]++;
-	}
-	pthread_mutex_unlock(&arraysMtx);
+
+
+
 
 	printRegistrationMessages(requestToRead);
 
