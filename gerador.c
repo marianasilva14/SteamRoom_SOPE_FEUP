@@ -30,9 +30,9 @@ pthread_mutex_t queueMtx = PTHREAD_MUTEX_INITIALIZER;
 char fifo_dir[100];
 Request *rejectedQueue;
 int queueIndex = 0;
-int generatedRequests[2] = {0};// M-0, F-1
-int rejectionsReceived[2] = {0};
-int discardedRejections[2] = {0};
+int generatedRequests[2] = {0,0};// M-0, F-1
+int rejectionsReceived[2] = {0,0};
+int discardedRejections[2] = {0,0};
 int missResponse;
 int nPedidos;
 
@@ -85,7 +85,6 @@ void * generateRequests(void * args){
   int originalGeneratedPedidos = 0;
   int triesToOpenFifo = 0;
   int fifo_req;
-  int end = 0;
   while((fifo_req=open(fifo_entrada,O_WRONLY))==-1){
     sleep(1);
     triesToOpenFifo++;
@@ -104,6 +103,7 @@ void * generateRequests(void * args){
     printf("Miss Response Value=%d\n",missResponse);
     sleep(1);
     if(queueIndex > 0){
+      nPedidos++;
       pthread_mutex_lock(&queueMtx);
       request = rejectedQueue[--queueIndex];
       pthread_mutex_unlock(&queueMtx);
@@ -117,21 +117,17 @@ void * generateRequests(void * args){
     else{
       if (nPedidos > 0){
         originalGeneratedPedidos++;
-        nPedidos--;
         strcpy(request.fifo_name, fifo_dir);
         request.requestID = i++;
-        randomNumber  = rand() % 2;
+        randomNumber = rand() % 2;
         request.gender = randomNumber == 0 ? 'M' : 'F';
         request.requestTime = (rand() % maxUtilizationTime) + 1;
         request.tries = 1;
-        if (nPedidos == 0){
-          end = 1;
-        }
       }
     }
     if (nPedidos > 0 || end){
       printf("Generating Request\n");
-      end = 0;
+      nPedidos--;
       request.state = PEDIDO;
       write(fifo_req, &request, sizeof(request));
       printRegistrationMessages(request);
@@ -186,7 +182,6 @@ void * handleRejected(void * args){
         rejectedQueue[queueIndex++] = rejected;
         pthread_mutex_unlock(&queueMtx);
       }
-
       printRegistrationMessages(rejected);
     }
     else{
