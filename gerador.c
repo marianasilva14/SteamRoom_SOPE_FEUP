@@ -9,6 +9,12 @@
 #include <pthread.h>
 
 /**
+ * Named pipes (FIFOS) to contact the program that manages the sauna
+ */
+char *fifo_entrada = "/tmp/entrada";
+char *fifo_rejeitados = "/tmp/rejeitados_";
+
+/**
  * Enum which has all the types of state that a request can have
  */
 typedef enum stateofrequest {PEDIDO, ACEITE, REJEITADO, DESCARTADO} StateOfRequest;
@@ -25,12 +31,10 @@ typedef struct{
     StateOfRequest state;
 } Request;
 
-//GLOBAL VARIABLES
+
 /**
- * Enum which has all the types of state that a request can have
+ * GLOBAL VARIABLES
  */
-char *fifo_entrada = "/tmp/entrada";
-char *fifo_rejeitados = "/tmp/rejeitados_";
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mrMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t queueMtx = PTHREAD_MUTEX_INITIALIZER;
@@ -83,7 +87,10 @@ void printRegistrationMessages(Request r1){
   }
 }
 
-
+/**
+ * Function that checks if is still processing
+ * @return 0 or 1
+ */
 int isStillProcessing(){
   int returnVal = 0;
   pthread_mutex_lock(&mrMtx);
@@ -176,7 +183,7 @@ void * generateRequests(void * args){
 /**
  * Function that is responsible for handling requests that are rejected by the sauna program and
  * if the number of rejections of a given request exceeds 3, it is discarded
- * @param number of requests missed
+ * @param args
  */
 void * handleRejected(void * args){
   int triesToOpenFifo = 0;

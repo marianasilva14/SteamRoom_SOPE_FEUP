@@ -244,9 +244,6 @@ void* handleRequest(void * args){
 
 	}
 
-
-
-
 	printRegistrationMessages(requestToRead);
 
 	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) == -1){
