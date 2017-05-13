@@ -11,11 +11,19 @@
 #include <string.h>
 #include <pthread.h>
 
+/**
+ * Named pipe (FIFO) to contact the nenerator program
+ */
 #define fifo_entrada "/tmp/entrada"
 
+/**
+ * Enum which has all the types of state that a request can have
+ */
 typedef enum stateofrequest {PEDIDO, ACEITE, REJEITADO, DESCARTADO} StateOfRequest;
 
-
+/**
+ * Struct which has the main properties of a request
+ */
 typedef struct{
 	char fifo_name[100]; // fifo_to_answer
 	int requestID;
@@ -25,7 +33,10 @@ typedef struct{
 	StateOfRequest state;
 } Request;
 
-//Global Variables
+
+/**
+ * Global variables
+ */
 int totalSeats;
 char SEM_NAME[] = "/sem1";
 sem_t *sem;
@@ -38,6 +49,13 @@ pthread_mutex_t genderMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t arraysMtx = PTHREAD_MUTEX_INITIALIZER;
 
 
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * Function that prints the statistical information on the number of requests received, the number
+ * of rejections and the number of requests served (total and by gender).
+ */
 void printStatus(){
 	pthread_mutex_lock(&arraysMtx);
 	int totalReceived = requestsReceived[0] + requestsReceived[1];
@@ -50,6 +68,15 @@ void printStatus(){
 
 }
 
+
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * This function is responsible for issuing log messages to a /tmp/bar.pid file that documents the
+ * rollout of the asset. The messages have the format: inst – pid – tid – p: g – dur – tip
+ * @param request
+ */
 void printRegistrationMessages(Request r1){
 	pid_t pid = getpid();
 	char location[100];
@@ -82,14 +109,30 @@ void printRegistrationMessages(Request r1){
 }
 
 
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * Function which calculates the past time
+ * @param result
+ * @param timeval2
+ * @param timeval1
+ */
 void timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval *t1)
 {
     long int diff = (t2->tv_usec + 1000000 * t2->tv_sec) - (t1->tv_usec + 1000000 * t1->tv_sec);
     result->tv_sec = diff / 1000000;
     result->tv_usec = diff % 1000000;
-
 }
 
+
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * Function that verifies the gender of the person making the request
+ * @param gender of the person making the request
+ */
 int checkGender(char requestGender){
 	int returnVal = 0;
 	pthread_mutex_lock(&genderMtx);
@@ -100,6 +143,17 @@ int checkGender(char requestGender){
 	return returnVal;
 }
 
+
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * Function that is responsible for handling requests.
+ * Reject the request if it is a different user from the one already occupied.
+ * If the request is the same as that of the users already in the sauna, it waits for notification
+ * that a place has wandered and accepts the request;
+ * @param args
+ */
 void* handleRequest(void * args){
 	int fifo_ans;
   struct timeval tvBegin, tvEnd, tvDiff;
@@ -190,9 +244,6 @@ void* handleRequest(void * args){
 
 	}
 
-
-
-
 	printRegistrationMessages(requestToRead);
 
 	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) == -1){
@@ -204,6 +255,7 @@ void* handleRequest(void * args){
 }
 
 
+//------------------------------------------------------------------------------------------------------//
 
 
 int main(int argc, char const *argv[]) {
