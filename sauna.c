@@ -33,7 +33,6 @@ typedef struct{
 	StateOfRequest state;
 } Request;
 
-
 /**
  * Global variables
  */
@@ -123,6 +122,7 @@ void timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval
     long int diff = (t2->tv_usec + 1000000 * t2->tv_sec) - (t1->tv_usec + 1000000 * t1->tv_sec);
     result->tv_sec = diff / 1000000;
     result->tv_usec = diff % 1000000;
+
 }
 
 
@@ -243,6 +243,9 @@ void* handleRequest(void * args){
 		}
 
 	}
+
+
+
 
 	printRegistrationMessages(requestToRead);
 

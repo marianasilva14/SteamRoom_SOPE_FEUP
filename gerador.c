@@ -9,12 +9,6 @@
 #include <pthread.h>
 
 /**
- * Named pipes (FIFOS) to contact the program that manages the sauna
- */
-#define fifo_entrada "/tmp/entrada"
-#define fifo_rejeitados "/tmp/rejeitados_"
-
-/**
  * Enum which has all the types of state that a request can have
  */
 typedef enum stateofrequest {PEDIDO, ACEITE, REJEITADO, DESCARTADO} StateOfRequest;
@@ -31,19 +25,23 @@ typedef struct{
     StateOfRequest state;
 } Request;
 
-
+//GLOBAL VARIABLES
 /**
- * Global variables
+ * Enum which has all the types of state that a request can have
  */
-int nPedidos;
+char *fifo_entrada = "/tmp/entrada";
+char *fifo_rejeitados = "/tmp/rejeitados_";
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mrMtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t queueMtx = PTHREAD_MUTEX_INITIALIZER;
 char fifo_dir[100];
 Request *rejectedQueue;
 int queueIndex = 0;
-int requestRejected = 0;
-int generatedRequests[2] = {0};// M-0, F-1
-int rejectionsReceived[2] = {0};
-int discardedRejections[2] = {0};
+int generatedRequests[2] = {0,0};// M-0, F-1
+int rejectionsReceived[2] = {0,0};
+int discardedRejections[2] = {0,0};
+int missResponse;
+int nPedidos;
 
 
 //------------------------------------------------------------------------------------------------------//
@@ -56,9 +54,9 @@ int discardedRejections[2] = {0};
  */
 void printRegistrationMessages(Request r1){
   pid_t pid = getpid();
-  char *location = NULL;
+  char location[100];
   sprintf(location,"/tmp/ger.%d",pid);
-  FILE *f = fopen(location, "w");
+  FILE *f = fopen(location, "a");
   if (f == NULL)
   {
     printf("Error opening file!\n");
@@ -77,8 +75,23 @@ void printRegistrationMessages(Request r1){
     break;
     case DESCARTADO:
     strcpy(tip,"DESCARTADO");
+    default:
+    break;
   }
-  fprintf(f,"%lu -%d -%d : %c -%d %s", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
+  if (fprintf(f,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip)<=0){
+    perror("Error writing to file\n");
+  }
+}
+
+
+int isStillProcessing(){
+  int returnVal = 0;
+  pthread_mutex_lock(&mrMtx);
+  if (missResponse > 0){
+    returnVal = 1;
+  }
+  pthread_mutex_unlock(&mrMtx);
+  return returnVal;
 }
 
 
@@ -94,6 +107,7 @@ void printRegistrationMessages(Request r1){
  */
 void * generateRequests(void * args){
   int randomNumber;
+  int originalGeneratedPedidos = 0;
   int triesToOpenFifo = 0;
   int fifo_req;
   while((fifo_req=open(fifo_entrada,O_WRONLY))==-1){
@@ -101,17 +115,24 @@ void * generateRequests(void * args){
     triesToOpenFifo++;
     if (triesToOpenFifo > 5){
       printf("Failed to Open Fifo Req\n");
-      //exit(1);
+      return NULL;
     }
   }
+
   int maxUtilizationTime = *(int*) args;
   int i = 0;
   Request request;
-  do {
-    if(requestRejected > 0){
-      pthread_mutex_lock(&mut);
-      request = rejectedQueue[queueIndex - requestRejected--];
-      pthread_mutex_unlock(&mut);
+
+  while(isStillProcessing()){
+    printf("Pedidos Originais Gerados = %d\n",originalGeneratedPedidos );
+    printf("Miss Response Value=%d\n",missResponse);
+    //usleep(100000);
+    if(queueIndex > 0){
+      nPedidos++;
+      pthread_mutex_lock(&queueMtx);
+      request = rejectedQueue[--queueIndex];
+      pthread_mutex_unlock(&queueMtx);
+      printf("Sending back Rejected Requests, Sex: %c\n",request.gender);
       if (request.gender == 'M'){
         rejectionsReceived[0]++;
       }else{
@@ -119,27 +140,31 @@ void * generateRequests(void * args){
       }
     }
     else{
-      strcpy(request.fifo_name, fifo_dir);
-      request.requestID = i++;
-      randomNumber  = rand() % 2;
-      request.gender = randomNumber == 0 ? 'M' : 'F';
-      request.requestTime = (rand() % maxUtilizationTime) + 1;
-      request.tries = 1;
+      if (nPedidos > 0){
+        originalGeneratedPedidos++;
+        strcpy(request.fifo_name, fifo_dir);
+        request.requestID = i++;
+        randomNumber = rand() % 2;
+        request.gender = randomNumber == 0 ? 'M' : 'F';
+        request.requestTime = (rand() % maxUtilizationTime) + 1;
+        request.tries = 1;
+        if (request.gender == 'M'){
+          generatedRequests[0]++;
+        }else{
+          generatedRequests[1]++;
+        }
+      }
+    }
+    if (nPedidos > 0){
+      printf("Generating Request\n");
+      nPedidos--;
       request.state = PEDIDO;
-    }
+      write(fifo_req, &request, sizeof(request));
+      printRegistrationMessages(request);
 
-    pthread_mutex_lock(&mut);
-    nPedidos--;
-    pthread_mutex_unlock(&mut);
-    write(fifo_req, &request, sizeof(request));
-    printRegistrationMessages(request);
-    if (request.gender == 'M'){
-      generatedRequests[0]++;
-    }else{
-      generatedRequests[1]++;
     }
-    sleep(1);
-  } while(nPedidos > 0);
+  }
+  printf("Debug 3\n");
 
   return NULL;
 }
@@ -153,29 +178,33 @@ void * generateRequests(void * args){
  * if the number of rejections of a given request exceeds 3, it is discarded
  * @param number of requests missed
  */
-void * handleRejected(void * missResponse){
+void * handleRejected(void * args){
   int triesToOpenFifo = 0;
   int fifo_ans;
+  printf("Fifo Dir %s\n", fifo_dir);
   while((fifo_ans=open(fifo_dir,O_RDONLY))==-1){
-    sleep(1);
+    //sleep(1);
     triesToOpenFifo++;
     if (triesToOpenFifo > 5){
       printf("Failed to Open Fifo Rejected\n");
     }
   }
-
+  printf("Debug1\n");
   Request rejected;
-  while (missResponse > 0){
+  while (isStillProcessing()){
     read(fifo_ans, &rejected, sizeof(rejected));
-    missResponse--;
+    pthread_mutex_lock(&mrMtx);
+    printf("missResponse value=%d\n",missResponse);
+    pthread_mutex_unlock(&mrMtx);
     if(rejected.state == REJEITADO)
     {
-      pthread_mutex_lock(&mut);
-      nPedidos++;
+      printf("Sauna Rejeitou SEX: %c\n", rejected.gender);
       rejected.tries++;
       if (rejected.tries > 3){
         rejected.state = DESCARTADO;
-        printRegistrationMessages(rejected);
+        pthread_mutex_lock(&mrMtx);
+        missResponse--;
+        pthread_mutex_unlock(&mrMtx);
         if (rejected.gender == 'M'){
           discardedRejections[0]++;
         }else{
@@ -183,14 +212,21 @@ void * handleRejected(void * missResponse){
         }
       }
       else{
+        pthread_mutex_lock(&queueMtx);
         rejectedQueue[queueIndex++] = rejected;
-        requestRejected++;
-        missResponse++;
-        printRegistrationMessages(rejected);
+        pthread_mutex_unlock(&queueMtx);
       }
-      pthread_mutex_unlock(&mut);
+      printRegistrationMessages(rejected);
+    }
+    else{
+      pthread_mutex_lock(&mrMtx);
+      missResponse--;
+      pthread_mutex_unlock(&mrMtx);
+      printf("Sauna Aceitou SEX: %c\n", rejected.gender);
     }
   }
+  printf("Closing fifo ans\n");
+  close(fifo_ans);
 
   return NULL;
 }
@@ -210,7 +246,6 @@ void printStatus(){
   printf("Pedidos Gerados: Total- %d, M- %d, F- %d\n",totalGenerated,generatedRequests[0],generatedRequests[1]);
   printf("Rejeicoes Recebidas: Total- %d, M- %d, F- %d\n",totalRejections,rejectionsReceived[0],rejectionsReceived[1]);
   printf("Rejeicoes Descartadas: Total- %d, M- %d, F- %d\n",totalDiscarded,discardedRejections[0],discardedRejections[1]);
-
 }
 
 
@@ -220,10 +255,9 @@ void printStatus(){
 int main(int argc, char const *argv[]) {
   /* code */
   srand(time(NULL));
-  sscanf(argv[1], "%d", &nPedidos);
-
-  int missResponse = nPedidos;
-  rejectedQueue = malloc(nPedidos * sizeof(Request));
+  sscanf(argv[1], "%d", &missResponse);
+  nPedidos = missResponse;
+  rejectedQueue = malloc(missResponse * sizeof(Request));
   int maxUtilizationTime; //in miliseconds
   sscanf(argv[2], "%d", &maxUtilizationTime);
 
@@ -235,11 +269,16 @@ int main(int argc, char const *argv[]) {
   mkfifo(fifo_dir, 0660);
   pthread_t requestThread, rejectedThread;
   pthread_create(&requestThread, NULL, generateRequests, &maxUtilizationTime);
-  pthread_create(&rejectedThread, NULL, handleRejected, &missResponse);
+  printf("Debug 4\n");
+  pthread_create(&rejectedThread, NULL, handleRejected, NULL);
+  printf("Debug 5\n");
   pthread_join(requestThread, NULL);
+  printf("Debug 6\n");
   pthread_join(rejectedThread, NULL);
+  printf("Debug 7\n");
   printStatus();
-
+  printf("Debug 8\n");
+  unlink(fifo_dir);
 
   return 0;
 }
