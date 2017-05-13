@@ -88,11 +88,17 @@ void printRegistrationMessages(Request r1){
 	pid_t pid = getpid();
 	char location[100];
 	sprintf(location,"/tmp/bal.%d",pid);
-	FILE *f = fopen(location, "a");
-	if (f == NULL)
+	FILE *logFile = fopen(location, "a");
+	int triesToOpen = 0;
+	while (logFile == NULL)
 	{
-		printf("Error opening file!\n");
-		exit(1);
+		sleep(1);
+		triesToOpen++;
+		logFile = fopen(location, "a");
+		if (triesToOpen>4){
+			printf("Error opening file!\n");
+			exit(1);
+		}
 	}
 	time_t raw_time;
 	time(&raw_time);
@@ -111,8 +117,8 @@ void printRegistrationMessages(Request r1){
     default:
     break;
 	}
-	fprintf(f,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
-	fclose(f);
+	fprintf(logFile,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
+	fclose(logFile);
 }
 
 
@@ -291,7 +297,6 @@ int findNextAvailableThread(int numThreads){
 }
 
 //------------------------------------------------------------------------------------------------------//
-
 
 
 int main(int argc, char const *argv[]) {

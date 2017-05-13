@@ -46,6 +46,8 @@ int rejectionsReceived[2] = {0,0};
 int discardedRejections[2] = {0,0};
 int missResponse;
 int nPedidos;
+FILE *logFile;
+pid_t pid;
 
 
 //------------------------------------------------------------------------------------------------------//
@@ -57,15 +59,7 @@ int nPedidos;
  * @param request
  */
 void printRegistrationMessages(Request r1){
-  pid_t pid = getpid();
-  char location[100];
-  sprintf(location,"/tmp/ger.%d",pid);
-  FILE *f = fopen(location, "a");
-  if (f == NULL)
-  {
-    printf("Error opening file!\n");
-    exit(1);
-  }
+
   time_t raw_time;
   time(&raw_time);
 
@@ -82,7 +76,7 @@ void printRegistrationMessages(Request r1){
     default:
     break;
   }
-  if (fprintf(f,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip)<=0){
+  if (fprintf(logFile,"%lu -%d -%d : %c -%d %s\n", raw_time,getpid(),r1.requestID,r1.gender,r1.requestTime,tip)<=0){
     perror("Error writing to file\n");
   }
 }
@@ -100,7 +94,6 @@ int isStillProcessing(){
   pthread_mutex_unlock(&mrMtx);
   return returnVal;
 }
-
 
 //------------------------------------------------------------------------------------------------------//
 
@@ -253,6 +246,24 @@ void printStatus(){
   printf("Rejeicoes Descartadas: Total- %d, M- %d, F- %d\n",totalDiscarded,discardedRejections[0],discardedRejections[1]);
 }
 
+void setLogFile(){
+  pid_t pid = getpid();
+  char location[100];
+  sprintf(location,"/tmp/ger.%d",pid);
+  logFile = fopen(location, "a");
+  int triesToOpen = 0;
+	while (logFile== NULL)
+	{
+		sleep(1);
+		triesToOpen++;
+    logFile = fopen(location,"a");
+		if (triesToOpen>4){
+			printf("Error opening file %s!\n", location);
+			exit(1);
+		}
+	}
+}
+
 
 //------------------------------------------------------------------------------------------------------//
 
@@ -266,9 +277,9 @@ int main(int argc, char const *argv[]) {
   rejectedQueue = malloc(missResponse * sizeof(Request));
   int maxUtilizationTime; //in miliseconds
   sscanf(argv[2], "%d", &maxUtilizationTime);
-
   strcpy(fifo_dir, fifo_rejeitados);
-  int pid = getpid();
+  setLogFile();
+  pid = getpid();
   char pidString[100];
   sprintf(pidString, "%d", pid);
   strcat(fifo_dir, pidString);
