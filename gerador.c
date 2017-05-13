@@ -8,9 +8,20 @@
 #include <time.h>
 #include <pthread.h>
 
+/**
+ * Named pipes (FIFOS) to contact the program that manages the sauna
+ */
+char *fifo_entrada = "/tmp/entrada";
+char *fifo_rejeitados = "/tmp/rejeitados_";
 
+/**
+ * Enum which has all the types of state that a request can have
+ */
 typedef enum stateofrequest {PEDIDO, ACEITE, REJEITADO, DESCARTADO} StateOfRequest;
 
+/**
+ * Struct which has the main properties of a request
+ */
 typedef struct{
     char fifo_name[100]; // fifo_to_answer
     int requestID;
@@ -21,9 +32,9 @@ typedef struct{
 } Request;
 
 
-//GLOBAL
-char *fifo_entrada = "/tmp/entrada";
-char *fifo_rejeitados = "/tmp/rejeitados_";
+/**
+ * GLOBAL VARIABLES
+ */
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mrMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t queueMtx = PTHREAD_MUTEX_INITIALIZER;
@@ -36,6 +47,15 @@ int discardedRejections[2] = {0,0};
 int missResponse;
 int nPedidos;
 
+
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * This function is responsible for issuing log messages to a /tmp/ger.pid file that documents the
+ * rollout of the asset. The messages have the format: inst – pid – p: g – dur – tip
+ * @param request
+ */
 void printRegistrationMessages(Request r1){
   pid_t pid = getpid();
   char location[100];
@@ -67,7 +87,10 @@ void printRegistrationMessages(Request r1){
   }
 }
 
-
+/**
+ * Function that checks if is still processing
+ * @return 0 or 1
+ */
 int isStillProcessing(){
   int returnVal = 0;
   pthread_mutex_lock(&mrMtx);
@@ -78,10 +101,17 @@ int isStillProcessing(){
   return returnVal;
 }
 
+
 //------------------------------------------------------------------------------------------------------//
-//args[0] = n Pedidos
-//args[1] = maxUtilizationTime
-//args[2] = path to awnser FIFO
+
+
+/**
+ * This function is responsible for generating requests that will be sent to the sauna program
+ * args[0] = number of request
+ * args[1] = maximum usage time
+ * args[2] = path to answer FIFO
+ * @param args
+ */
 void * generateRequests(void * args){
   int randomNumber;
   int originalGeneratedPedidos = 0;
@@ -144,7 +174,15 @@ void * generateRequests(void * args){
   return NULL;
 }
 
+
 //------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * Function that is responsible for handling requests that are rejected by the sauna program and
+ * if the number of rejections of a given request exceeds 3, it is discarded
+ * @param args
+ */
 void * handleRejected(void * args){
   int triesToOpenFifo = 0;
   int fifo_ans;
@@ -198,6 +236,14 @@ void * handleRejected(void * args){
   return NULL;
 }
 
+
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * This function prints statistical information on the number of requests generated, the number
+ * of rejections received and the number of discards discarded (total and by gender).
+ */
 void printStatus(){
   int totalGenerated = generatedRequests[0] + generatedRequests[1];
   int totalRejections = rejectionsReceived[0] + rejectionsReceived[1];
@@ -205,8 +251,11 @@ void printStatus(){
   printf("Pedidos Gerados: Total- %d, M- %d, F- %d\n",totalGenerated,generatedRequests[0],generatedRequests[1]);
   printf("Rejeicoes Recebidas: Total- %d, M- %d, F- %d\n",totalRejections,rejectionsReceived[0],rejectionsReceived[1]);
   printf("Rejeicoes Descartadas: Total- %d, M- %d, F- %d\n",totalDiscarded,discardedRejections[0],discardedRejections[1]);
-
 }
+
+
+//------------------------------------------------------------------------------------------------------//
+
 
 int main(int argc, char const *argv[]) {
   /* code */
