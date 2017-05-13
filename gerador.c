@@ -90,7 +90,7 @@ void * generateRequests(void * args){
   while((fifo_req=open(fifo_entrada,O_WRONLY))==-1){
     sleep(1);
     triesToOpenFifo++;
-    if (triesToOpenFifo > 5){
+    if (triesToOpenFifo > 4){
       printf("Failed to Open Fifo Req\n");
       return NULL;
     }
@@ -101,9 +101,7 @@ void * generateRequests(void * args){
   Request request;
 
   while(isStillProcessing()){
-    printf("Pedidos Originais Gerados = %d\n",originalGeneratedPedidos );
-    printf("Miss Response Value=%d\n",missResponse);
-    //usleep(100000);
+    usleep(10000);
     if(queueIndex > 0){
       nPedidos++;
       pthread_mutex_lock(&queueMtx);
@@ -215,6 +213,7 @@ int main(int argc, char const *argv[]) {
   srand(time(NULL));
   sscanf(argv[1], "%d", &missResponse);
   nPedidos = missResponse;
+  printf("Main: nPedidos=%d\n",nPedidos);
   rejectedQueue = malloc(missResponse * sizeof(Request));
   int maxUtilizationTime; //in miliseconds
   sscanf(argv[2], "%d", &maxUtilizationTime);

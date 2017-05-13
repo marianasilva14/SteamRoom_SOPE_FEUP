@@ -25,6 +25,11 @@ typedef struct{
 	StateOfRequest state;
 } Request;
 
+typedef struct{
+	Request request;
+	int threadID;
+} RequestWrapper;
+
 //Global Variables
 int totalSeats;
 char SEM_NAME[] = "/sem1";
@@ -36,6 +41,7 @@ int rejectionsReceived[2] = {0};
 int requestsServed[2] = {0};
 pthread_mutex_t genderMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t arraysMtx = PTHREAD_MUTEX_INITIALIZER;
+int *threadsAvailable;
 
 
 void printStatus(){
@@ -105,13 +111,16 @@ void* handleRequest(void * args){
   struct timeval tvBegin, tvEnd, tvDiff;
   int elapsedMiliseconds = 0;
 	int semValue;
-	Request requestToRead = *(Request*) args;
+	RequestWrapper requestWrapper = *(RequestWrapper*) args;
+	Request requestToRead = requestWrapper.request;
+	int threadID = requestWrapper.threadID;
 	int numTries = 0;
 	while ((fifo_ans = open(requestToRead.fifo_name,O_WRONLY))==-1){
 		numTries++;
 		printf("Sauna: Error opening fifo awnser, try number %d\n",numTries);
 		sleep(1);
 		if (numTries > 4){
+			threadsAvailable[threadID] = 1;
 			return NULL;
 		}
 
@@ -200,10 +209,32 @@ void* handleRequest(void * args){
 	}else{
 		printf("Sent info back to generator\n");
 	}
+	printf("Thread %d is now available\n",threadID);
+	threadsAvailable[threadID] = 1;
   return NULL;
 }
 
 
+void initAvailableThreads(int numThreads){
+	int i;
+	for (i=0; i <numThreads;i++){
+		threadsAvailable[i] = 1;
+	}
+}
+
+/**
+*
+*@return Index of the next available thread, or -1 case there is no one available.
+*/
+int findNextAvailableThread(int numThreads){
+	int i;
+	for (i=0; i<numThreads;i++){
+		if (threadsAvailable[i] == 1){
+			return i;
+		}
+	}
+	return -1;
+}
 
 
 int main(int argc, char const *argv[]) {
@@ -239,37 +270,57 @@ int main(int argc, char const *argv[]) {
 	}
 
 	int numThreads = totalSeats;
-	int threadIterator = 0;
 	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads);
+	threadsAvailable = malloc(sizeof(int)*numThreads);
+	initAvailableThreads(numThreads);
+	int maxIdUsed = -1;
 	printf("Allocated initial threads\n");
 
 	Request requestToRead;
+	RequestWrapper requestWrapper;
 	int n = 1;
 	while(n>0){
 		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
-		if (threadIterator >= numThreads && n>0){
+		int nextThreadAvailable = findNextAvailableThread(numThreads);
+		if (nextThreadAvailable == -1){
 			printf("Going to Reallocate Memory\n");
+			int j = numThreads;
 			numThreads = numThreads * 2;
 			if ( (requestThreads = realloc(requestThreads,numThreads * sizeof(pthread_t))) == NULL){
 				perror("Error Reallocating Memory for threads\n");
 			}
 			else{
+				for (; j < numThreads;j++){
+					threadsAvailable[j] = 1;
+				}
+				nextThreadAvailable = findNextAvailableThread(numThreads);
 				printf("Memory Reallocated\n");
 			}
 		}
-		printf("Read new request\n");
-		pthread_create(&requestThreads[threadIterator++], NULL, handleRequest, &requestToRead);
-		printf("Created thread %d\n", threadIterator-1);
+		if (n > 0){
+			printf("Read new request\n");
+			requestWrapper.request = requestToRead;
+			requestWrapper.threadID = nextThreadAvailable;
+			pthread_create(&requestThreads[nextThreadAvailable], NULL, handleRequest, &requestWrapper);
+			threadsAvailable[nextThreadAvailable] = 0;
+			if (nextThreadAvailable>maxIdUsed){
+				maxIdUsed = nextThreadAvailable;
+			}
+			printf("Created thread %d\n", nextThreadAvailable);
+		}
+
 	}
 
 	int i = 0;
-	for (; i < threadIterator;i++){
+	for (; i <= maxIdUsed;i++){
 		printf("Joining thread %d\n",i);
 		pthread_join(requestThreads[i], NULL);
 		printf("Joined Thread %d\n",i);
 	}
 	printf("Freeing array of threads\n");
 	free(requestThreads);
+	printf("Freeing array of available threads\n");
+	free(threadsAvailable);
 	printf("Destroying Semaphore\n");
 	sem_destroy(sem);
 	printf("Semaphore Destroyed\n");
