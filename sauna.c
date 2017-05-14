@@ -33,7 +33,9 @@ typedef struct{
 	StateOfRequest state;
 } Request;
 
-
+/**
+* Structure that wraps a request and the thread responsible for it.
+*/
 typedef struct{
 	Request request;
 	int threadID;
@@ -96,11 +98,17 @@ void printRegistrationMessages(Request r1){
 	pid_t pid = getpid();
 	char location[100];
 	sprintf(location,"/tmp/bal.%d",pid);
-	FILE *f = fopen(location, "a");
-	if (f == NULL)
+	FILE *logFile = fopen(location, "a");
+	int triesToOpen = 0;
+	while (logFile == NULL)
 	{
-		printf("Error opening file!\n");
-		exit(1);
+		sleep(1);
+		triesToOpen++;
+		logFile = fopen(location, "a");
+		if (triesToOpen>4){
+			printf("Error opening file!\n");
+			exit(1);
+		}
 	}
 	time_t raw_time;
 	time(&raw_time);
@@ -119,8 +127,8 @@ void printRegistrationMessages(Request r1){
     default:
     	break;
 	}
-	fprintf(f,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
-	fclose(f);
+	fprintf(logFile,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
+	fclose(logFile);
 }
 
 
@@ -273,7 +281,15 @@ void sendResponse(Request requestToRead, int threadID){
 //------------------------------------------------------------------------------------------------------//
 
 
-//TODO: COMMENT I DONT NO WHAT SAY ABAOUT THIS :/
+/**
+ * This function should be called every time that a sauna's user should rest in the sauna.
+ * The function returns after the user has rested the desired time. Warning: Instead
+ * of sleeping (which measures processor time), this function measures time elaped,
+ * because this way it is more reallistic.
+ *
+ * @param requestToRead request already processed and ready to be sent to gerador
+ * @param threadID ID of thread needed to open_FIFO
+ */
 void restInSauna(Request requestToRead, struct timeval* tvBegin){
 	struct timeval tvEnd, tvDiff;
   	int elapsedMiliseconds = 0;
@@ -318,7 +334,6 @@ void* handleRequest(void * args){
 		actualGenderToDefault();
 	}
 	else{
-		//Reject the Request
 		rejectRequest(&requestToRead);
 	}
 
@@ -334,8 +349,10 @@ void* handleRequest(void * args){
 
 
 /**
- *	Function to initialize the array of int to know if one thread is available to use
- */
+* Function to initialize the array threadsAvailable, which is used to know if
+* one thread is available to use
+*/
+
 void initAvailableThreads(int numThreads){
 	int i;
 	for (i=0; i <numThreads;i++){
