@@ -89,7 +89,7 @@ void printRegistrationMessages(Request r1){
 
 /**
  * Function that checks if is still processing
- * @return 0 or 1
+ * @return 0 or 1 (0 if isn't working, 1 if still working)
  */
 int isStillProcessing(){
   int returnVal = 0;
