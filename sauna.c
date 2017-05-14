@@ -33,7 +33,9 @@ typedef struct{
 	StateOfRequest state;
 } Request;
 
-
+/**
+* Structure that wraps a request and the thread responsible for it.
+*/
 typedef struct{
 	Request request;
 	int threadID;
@@ -270,7 +272,15 @@ void sendResponse(Request requestToRead, int threadID){
 //------------------------------------------------------------------------------------------------------//
 
 
-//TODO: COMMENT I DONT NO WHAT SAY ABAOUT THIS :/
+/**
+ * This function should be called every time that a sauna's user should rest in the sauna.
+ * The function returns after the user has rested the desired time. Warning: Instead
+ * of sleeping (which measures processor time), this function measures time elaped,
+ * because this way it is more reallistic.
+ *
+ * @param requestToRead request already processed and ready to be sent to gerador
+ * @param threadID ID of thread needed to open_FIFO
+ */
 void restInSauna(Request requestToRead, struct timeval* tvBegin){
 	struct timeval tvEnd, tvDiff;
   	int elapsedMiliseconds = 0;
@@ -315,7 +325,6 @@ void* handleRequest(void * args){
 		actualGenderToDefault();
 	}
 	else{
-		//Reject the Request
 		rejectRequest(&requestToRead);
 	}
 
@@ -331,7 +340,7 @@ void* handleRequest(void * args){
 
 
 /**
-*	Function to initialize the array of int to know if one thread is available to use
+*	Function to initialize the array threadsAvailable, which is used to know if one thread is available to use
 */
 
 void initAvailableThreads(int numThreads){
