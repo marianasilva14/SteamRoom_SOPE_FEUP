@@ -44,7 +44,7 @@ int generatedRequests[2] = {0,0};// M-0, F-1
 int rejectionsReceived[2] = {0,0};
 int discardedRejections[2] = {0,0};
 int missResponse;
-int nPedidos;
+int remainingRequests;
 FILE *logFile;
 pid_t pid;
 int sleepTimeBetweenRequests = 10000;
@@ -96,68 +96,108 @@ int isStillProcessing(){
   return returnVal;
 }
 
-//------------------------------------------------------------------------------------------------------//
-
-
 /**
- * This function is responsible for generating requests that will be sent to the sauna program
- * args[0] = number of request
- * args[1] = maximum usage time
- * args[2] = path to answer FIFO
- * @param args
+ * This function opens the FIFO which will be used to send the requests.
+ * @param fifo_req A null-pointer to an int that will be assigned to the FIFO that will be opened.
+ * @return -1 in case of error, 0 in case of success.
  */
-void * generateRequests(void * args){
-  int randomNumber;
-  int originalGeneratedPedidos = 0;
+int openFifoToSendRequests(int *fifo_req){
   int triesToOpenFifo = 0;
-  int fifo_req;
-  while((fifo_req=open(fifo_entrada,O_WRONLY))==-1){
+  while((*fifo_req=open(fifo_entrada,O_WRONLY))==-1){
     sleep(1);
     triesToOpenFifo++;
     if (triesToOpenFifo > 4){
-      printf("Failed to Open Fifo Req\n");
-      return NULL;
+      perror("Failed to Open Fifo To Send Requests\n");
+      return -1;
     }
   }
-  int i = 0;
+  return 0;
+}
+
+
+/**
+ * This function gets a request from the queue, and updates the
+ * rejectionsReceived arrays.
+ * @param request A null-pointer to a Request that will be assigned to a Request in the queue.
+ */
+void handleRequestInQueue(Request *request){
+  remainingRequests++;
+  pthread_mutex_lock(&queueMtx);
+  *request = rejectedQueue[--queueIndex];
+  pthread_mutex_unlock(&queueMtx);
+  printf("Sending back Rejected Requests, Sex: %c\n",request->gender);
+  if (request->gender == 'M'){
+    rejectionsReceived[0]++;
+  }else{
+    rejectionsReceived[1]++;
+  }
+}
+
+/*
+ * This function chekcs if there is any request rejected waiting to be sent again.
+ * @return An int > 0 if true, 0 otherwise.
+ */
+int areThereRequestsWaitingInQueue(){
+  pthread_mutex_lock(&queueMtx);
+  int cpy = queueIndex;
+  pthread_mutex_unlock(&queueMtx);
+  return cpy;
+}
+
+/**
+ * This function fills a new request with the necessary information.
+ * @param request The Request to be filled.
+ * @param id The ID that the request should take.
+ */
+void fillNewRequest(Request *request, int *id){
+  strcpy(request->fifo_name, fifo_rejeitados);
+  request->requestID = (*id)++;
+  request->gender = (rand() % 2) == 0 ? 'M' : 'F';
+  request->requestTime = (rand() % maxUtilizationTime) + 1;
+  request->tries = 1;
+  if (request->gender == 'M'){
+    generatedRequests[0]++;
+  }else{
+    generatedRequests[1]++;
+  }
+}
+
+/**
+ * This function sends a request through the specified fifo
+ * @param fifo_req The FIFO which shall be used to send the request
+ * @param request The Request to be sent
+ */
+void writeRequestInFifo(int fifo_req,Request *request){
+  printf("Generating Request\n");
+  remainingRequests--;
+  request->state = PEDIDO;
+  write(fifo_req, request, sizeof(*request));
+}
+
+/**
+ * This function is responsible for generating requests that will be sent to the sauna program
+ * @param args NULL
+ */
+void * generateRequests(void * args){
+  int fifo_req;
+  if (openFifoToSendRequests(&fifo_req)==-1){
+    return NULL;
+  }
+  int requestCounter = 0;
   Request request;
-
   while(isStillProcessing()){
-
     usleep(sleepTimeBetweenRequests);
-    if(queueIndex > 0){
-      nPedidos++;
-      pthread_mutex_lock(&queueMtx);
-      request = rejectedQueue[--queueIndex];
-      pthread_mutex_unlock(&queueMtx);
-      printf("Sending back Rejected Requests, Sex: %c\n",request.gender);
-      if (request.gender == 'M'){
-        rejectionsReceived[0]++;
-      }else{
-        rejectionsReceived[1]++;
-      }
+
+    if(areThereRequestsWaitingInQueue()){
+      handleRequestInQueue(&request);
     }
     else{
-      if (nPedidos > 0){
-        originalGeneratedPedidos++;
-        strcpy(request.fifo_name, fifo_rejeitados);
-        request.requestID = i++;
-        randomNumber = rand() % 2;
-        request.gender = randomNumber == 0 ? 'M' : 'F';
-        request.requestTime = (rand() % maxUtilizationTime) + 1;
-        request.tries = 1;
-        if (request.gender == 'M'){
-          generatedRequests[0]++;
-        }else{
-          generatedRequests[1]++;
-        }
+      if (remainingRequests > 0){
+        fillNewRequest(&request,&requestCounter);
       }
     }
-    if (nPedidos > 0){
-      printf("Generating Request\n");
-      nPedidos--;
-      request.state = PEDIDO;
-      write(fifo_req, &request, sizeof(request));
+    if (remainingRequests > 0){
+      writeRequestInFifo(fifo_req,&request);
       printRegistrationMessages(request);
 
     }
@@ -358,7 +398,7 @@ void readConsoleArguments(int argc, char const *argv[]){
 int main(int argc, char const *argv[]) {
   srand(time(NULL));
   readConsoleArguments(argc,argv);
-  nPedidos = missResponse;
+  remainingRequests = missResponse;
   rejectedQueue = malloc(missResponse * sizeof(Request));
   setLogFile();
   createFifoToReceiveAwnsers();
