@@ -440,7 +440,7 @@ int main(int argc, char const *argv[]) {
 			if (nextThreadAvailable>maxIdUsed){
 				maxIdUsed = nextThreadAvailable;
 			}
-			printf("Created thread %d\n", nextThreadAvailable);
+			printf("Initilized thread %d\n", nextThreadAvailable);
 		}
 
 	}

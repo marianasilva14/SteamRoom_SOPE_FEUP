@@ -12,7 +12,7 @@
  * Named pipes (FIFOS) to contact the program that manages the sauna
  */
 char *fifo_entrada = "/tmp/entrada";
-char *fifo_rejeitados = "/tmp/rejeitados_";
+char *fifo_rejeitados;
 
 /**
  * Enum which has all the types of state that a request can have
@@ -38,7 +38,6 @@ typedef struct{
 pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mrMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t queueMtx = PTHREAD_MUTEX_INITIALIZER;
-char fifo_dir[100];
 Request *rejectedQueue;
 int queueIndex = 0;
 int generatedRequests[2] = {0,0};// M-0, F-1
@@ -48,6 +47,8 @@ int missResponse;
 int nPedidos;
 FILE *logFile;
 pid_t pid;
+int sleepTimeBetweenRequests = 10000;
+int maxUtilizationTime;
 
 
 //------------------------------------------------------------------------------------------------------//
@@ -118,13 +119,12 @@ void * generateRequests(void * args){
       return NULL;
     }
   }
-
-  int maxUtilizationTime = *(int*) args;
   int i = 0;
   Request request;
 
   while(isStillProcessing()){
-    usleep(10000);
+
+    usleep(sleepTimeBetweenRequests);
     if(queueIndex > 0){
       nPedidos++;
       pthread_mutex_lock(&queueMtx);
@@ -140,7 +140,7 @@ void * generateRequests(void * args){
     else{
       if (nPedidos > 0){
         originalGeneratedPedidos++;
-        strcpy(request.fifo_name, fifo_dir);
+        strcpy(request.fifo_name, fifo_rejeitados);
         request.requestID = i++;
         randomNumber = rand() % 2;
         request.gender = randomNumber == 0 ? 'M' : 'F';
@@ -162,7 +162,6 @@ void * generateRequests(void * args){
 
     }
   }
-  printf("Debug 3\n");
 
   return NULL;
 }
@@ -179,15 +178,15 @@ void * generateRequests(void * args){
 void * handleRejected(void * args){
   int triesToOpenFifo = 0;
   int fifo_ans;
-  printf("Fifo Dir %s\n", fifo_dir);
-  while((fifo_ans=open(fifo_dir,O_RDONLY))==-1){
+  while((fifo_ans=open(fifo_rejeitados,O_RDONLY))==-1){
     //sleep(1);
     triesToOpenFifo++;
-    if (triesToOpenFifo > 5){
-      printf("Failed to Open Fifo Rejected\n");
+    sleep(1);
+    if (triesToOpenFifo > 4){
+      perror("Failed to Open Fifo Rejected\n");
+      return NULL;
     }
   }
-  printf("Debug1\n");
   Request rejected;
   while (isStillProcessing()){
     read(fifo_ans, &rejected, sizeof(rejected));
@@ -196,7 +195,6 @@ void * handleRejected(void * args){
     pthread_mutex_unlock(&mrMtx);
     if(rejected.state == REJEITADO)
     {
-      printf("Sauna Rejeitou SEX: %c\n", rejected.gender);
       rejected.tries++;
       if (rejected.tries > 3){
         rejected.state = DESCARTADO;
@@ -220,10 +218,8 @@ void * handleRejected(void * args){
       pthread_mutex_lock(&mrMtx);
       missResponse--;
       pthread_mutex_unlock(&mrMtx);
-      printf("Sauna Aceitou SEX: %c\n", rejected.gender);
     }
   }
-  printf("Closing fifo ans\n");
   close(fifo_ans);
 
   return NULL;
@@ -246,8 +242,12 @@ void printStatus(){
   printf("Rejeicoes Descartadas: Total- %d, M- %d, F- %d\n",totalDiscarded,discardedRejections[0],discardedRejections[1]);
 }
 
+/**
+ * setLogFile() is responsible for creating and open the file to which the current process
+ * should output the necessary information.
+ */
 void setLogFile(){
-  pid_t pid = getpid();
+  pid = getpid();
   char location[100];
   sprintf(location,"/tmp/ger.%d",pid);
   logFile = fopen(location, "a");
@@ -265,37 +265,106 @@ void setLogFile(){
 }
 
 
+
+
+/**
+* createFifoToReceiveAwnsers() is rensponsible to set the current value on string fifo_rejeitados
+* and to create the Fifo itself.
+*/
+void createFifoToReceiveAwnsers(){
+  fifo_rejeitados = malloc(sizeof(char) * 26);
+  strcpy(fifo_rejeitados,"/tmp/rejeitados_");
+  char pidString[10];
+  sprintf(pidString, "%d", pid);
+  strcat(fifo_rejeitados, pidString);
+  mkfifo(fifo_rejeitados, 0660);
+}
+
+/**
+ * createThreads(pthread_t *requestThread, pthread_t *rejectedThread) is responsible for creating the thread
+ * that will generate requests and the thread that will handle rejected requests from sauna.
+ * @param requestThread pointer to the thread responsible for generating requests.
+ * @param rejectedThread pointer to the thread responsible for handling rejected requests.
+ */
+void createThreads(pthread_t *requestThread, pthread_t *rejectedThread){
+  pthread_create(requestThread, NULL, generateRequests,NULL);
+  pthread_create(rejectedThread, NULL, handleRejected, NULL);
+}
+
+/**
+ * waitAndTerminateThreads(pthread_t *requestThread,pthread_t rejectedThread) is responsible for
+ * waiting and terminating the requestThread and the rejectedThread.
+ *
+ * @param requestThread pointer to the thread responsible for generating requests.
+ * @param rejectedThread pointer to the thread responsible for handling rejected requests.
+ */
+void waitAndTerminateThreads(pthread_t *requestThread,pthread_t *rejectedThread){
+  pthread_join(*requestThread, NULL);
+  pthread_join(*rejectedThread, NULL);
+
+}
+
+/**
+ * handleThreads() is responsible for creating the necessary threads, wait and terminate them.
+ */
+void handleThreads( ){
+  pthread_t requestThread, rejectedThread;
+  createThreads(&requestThread,&rejectedThread);
+  waitAndTerminateThreads(&requestThread,&rejectedThread);
+}
+
+/**
+ * readSleepTimeBetweenRequests(int argc, char const *argv[]) is responsible for setting the time between requests generation.
+ * If no time is passed as argument, a default value = 10ms will be used;
+ * @param argc The number of arguments read when program was lauched.
+ * @param argv The arguments read when program was launched.
+ */
+void readSleepTimeBetweenRequests(int argc, char const *argv[]){
+  if (argc==4){
+    int tempSleepTime;
+    sscanf(argv[3],"%d",&tempSleepTime);
+    sleepTimeBetweenRequests = tempSleepTime * 1000;
+  }
+}
+
+/**
+ * readConsoleArguments(int argc, char const *argv[]) is rensponsible for reading the arguments passed by launch,
+ * and saving them on the global variables.
+ *
+ * @param argc The number of arguments read when program was lauched.
+ * @param argv The arguments read when program was launched.
+ */
+void readConsoleArguments(int argc, char const *argv[]){
+  if (argc > 2 && argc < 5){
+    sscanf(argv[1], "%d", &missResponse);
+    sscanf(argv[2], "%d", &maxUtilizationTime);
+    readSleepTimeBetweenRequests(argc,argv);
+  }
+  else{
+    printf("Invalid number of arguments\n");
+    printf("Example of how to run: 'gerador <n_pedidos> <tempo_max_utilizacao> <tempo_entre_geracao_pedidos>(optional)'\n");
+  }
+
+}
+
 //------------------------------------------------------------------------------------------------------//
 
 
+/**
+ * main(int argc, char const *argv[]) is the first function to run.
+ * @param argc The number of arguments read when program was lauched.
+ * @param argv The arguments read when program was launched.
+ */
 int main(int argc, char const *argv[]) {
-  /* code */
   srand(time(NULL));
-  sscanf(argv[1], "%d", &missResponse);
+  readConsoleArguments(argc,argv);
   nPedidos = missResponse;
-  printf("Main: nPedidos=%d\n",nPedidos);
   rejectedQueue = malloc(missResponse * sizeof(Request));
-  int maxUtilizationTime; //in miliseconds
-  sscanf(argv[2], "%d", &maxUtilizationTime);
-  strcpy(fifo_dir, fifo_rejeitados);
   setLogFile();
-  pid = getpid();
-  char pidString[100];
-  sprintf(pidString, "%d", pid);
-  strcat(fifo_dir, pidString);
-  mkfifo(fifo_dir, 0660);
-  pthread_t requestThread, rejectedThread;
-  pthread_create(&requestThread, NULL, generateRequests, &maxUtilizationTime);
-  printf("Debug 4\n");
-  pthread_create(&rejectedThread, NULL, handleRejected, NULL);
-  printf("Debug 5\n");
-  pthread_join(requestThread, NULL);
-  printf("Debug 6\n");
-  pthread_join(rejectedThread, NULL);
-  printf("Debug 7\n");
+  createFifoToReceiveAwnsers();
+  handleThreads();
   printStatus();
-  printf("Debug 8\n");
-  unlink(fifo_dir);
+  unlink(fifo_rejeitados);
 
   return 0;
 }
