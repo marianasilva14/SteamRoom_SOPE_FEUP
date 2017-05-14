@@ -68,9 +68,18 @@ void printStatus(){
 	int totalReceived = requestsReceived[0] + requestsReceived[1];
 	int totalRejections = rejectionsReceived[0] + rejectionsReceived[1];
 	int totalServed = requestsServed[0] + requestsServed[1];
-	printf("Pedidos Recebidos: Total- %d, M- %d, F- %d\n",totalReceived,requestsReceived[0],requestsReceived[1]);
-	printf("Rejeicoes: Total- %d, M- %d, F- %d\n",totalRejections,rejectionsReceived[0],rejectionsReceived[1]);
-	printf("Pedidos servidos: Total- %d, M- %d, F- %d\n",totalServed,requestsServed[0],requestsServed[1]);
+	printf("Pedidos Recebidos: Total- %d, M- %d, F- %d\n",
+		totalReceived,
+		requestsReceived[0],
+		requestsReceived[1]);
+	printf("Rejeicoes: Total- %d, M- %d, F- %d\n",
+		totalRejections,
+		rejectionsReceived[0],
+		rejectionsReceived[1]);
+	printf("Pedidos servidos: Total- %d, M- %d, F- %d\n",
+		totalServed,
+		requestsServed[0],
+		requestsServed[1]);
 	pthread_mutex_unlock(&arraysMtx);
 }
 
@@ -325,9 +334,8 @@ void* handleRequest(void * args){
 
 
 /**
-*	Function to initialize the array of int to know if one thread is available to use
-*/
-
+ *	Function to initialize the array of int to know if one thread is available to use
+ */
 void initAvailableThreads(int numThreads){
 	int i;
 	for (i=0; i <numThreads;i++){
@@ -339,9 +347,9 @@ void initAvailableThreads(int numThreads){
 
 
 /**
-*
-*@return Index of the next available thread, or -1 case there is no one available.
-*/
+ *
+ *@return Index of the next available thread, or -1 case there is no one available.
+ */
 int findNextAvailableThread(int numThreads){
 	int i;
 	for (i=0; i<numThreads;i++){
@@ -352,33 +360,40 @@ int findNextAvailableThread(int numThreads){
 	return -1;
 }
 
-
 //------------------------------------------------------------------------------------------------------//
 
-int main(int argc, char const *argv[]) {
-	/* code */
-	if (argc != 2){
-		printf("Usage: sauna <n_lugares>\n");
-		return 1;
-	}
-	sscanf(argv[1], "%d", &totalSeats);
-	printf("Total Seats available = %d\n",totalSeats);
+
+/**
+ * Function to create and initialize semaphore to be used to synchronize threads
+ */
+void createAndInitializeSem(){
 	//create & initialize semaphore
 	if ( (sem = sem_open(SEM_NAME,O_CREAT,0660,totalSeats)) == SEM_FAILED){
 		perror("Error opening Semaphore\n");
-		return 2;
+		exit(2);
 	}
 	if (sem_init(sem,0,totalSeats)==-1){
 		perror("sem_init()\n");
+		exit(2);
 	}
 	int tempSemValue;
 	sem_getvalue(sem, &tempSemValue);
-	printf("in Main Sem Value=%d\n",tempSemValue);
-	mkfifo(fifo_entrada, 0660);
+	printf("Sem Value=%d\n",tempSemValue);
+}
 
-	int fifo_req;
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * Function to create and open FIFO to receive requests
+ *
+ * @param fifo_req FIFO after opened
+ */
+void createAndOpenFIFO_REQ(int* fifo_req){
+	printf("Creating and open FIFO_entrada\n");
+	mkfifo(fifo_entrada, 0660);
 	int triesToOpenFifo = 0;
-	while((fifo_req=open(fifo_entrada,O_RDONLY))==-1){
+	while((*fifo_req=open(fifo_entrada,O_RDONLY))==-1){
 		sleep(1);
 		triesToOpenFifo++;
 		if (triesToOpenFifo > 5){
@@ -386,51 +401,21 @@ int main(int argc, char const *argv[]) {
 			//exit(1);
 		}
 	}
+	printf("FIFO_entrada open\n");
+}
 
-	int numThreads = totalSeats;
-	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads);
-	threadsAvailable = malloc(sizeof(int)*numThreads);
-	initAvailableThreads(numThreads);
-	int maxIdUsed = -1;
-	printf("Allocated initial threads\n");
+//------------------------------------------------------------------------------------------------------//
 
-	Request requestToRead;
-	RequestWrapper requestWrapper;
-	int n = 1;
-	while(n>0){
-		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
-		int nextThreadAvailable = findNextAvailableThread(numThreads);
-		if (nextThreadAvailable == -1){
-			printf("Going to Reallocate Memory\n");
-			int j = numThreads;
-			numThreads = numThreads * 2;
-			if ( (requestThreads = realloc(requestThreads,numThreads * sizeof(pthread_t))) == NULL){
-				perror("Error Reallocating Memory for threads\n");
-			}
-			else{
-				for (; j < numThreads;j++){
-					threadsAvailable[j] = 1;
-				}
-				nextThreadAvailable = findNextAvailableThread(numThreads);
-				printf("Memory Reallocated\n");
-			}
-		}
-		if (n > 0){
-			printf("Read new request\n");
-			requestWrapper.request = requestToRead;
-			requestWrapper.threadID = nextThreadAvailable;
-			pthread_create(&requestThreads[nextThreadAvailable], NULL, handleRequest, &requestWrapper);
-			threadsAvailable[nextThreadAvailable] = 0;
-			if (nextThreadAvailable>maxIdUsed){
-				maxIdUsed = nextThreadAvailable;
-			}
-			printf("Created thread %d\n", nextThreadAvailable);
-		}
 
-	}
-
+/**
+ * Function to release all resources used
+ * 
+ * @param requestThreads array of threads to be released
+ * @param maxIdUsed number of threads on array
+ */
+void freeResources(pthread_t *requestThreads, int* maxIdUsed){
 	int i = 0;
-	for (; i <= maxIdUsed;i++){
+	for (; i <= *maxIdUsed;i++){
 		printf("Joining thread %d\n",i);
 		pthread_join(requestThreads[i], NULL);
 		printf("Joined Thread %d\n",i);
@@ -444,7 +429,114 @@ int main(int argc, char const *argv[]) {
 	printf("Semaphore Destroyed\n");
 	unlink(fifo_entrada);
 	printf("Destryoed FIFO\n");
-	printStatus();
+}
 
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * Function to realloc memory of the array of threads to double
+ * 
+ * @param requestThreads array of threads to be realloced
+ * @param numThreads size of array before realloc
+ */
+void reallocMemory(pthread_t* requestThreads, int* numThreads){
+	printf("Going to Reallocate Memory\n");
+	int j = *numThreads;
+	*numThreads = *numThreads * 2;
+	if ( (requestThreads = realloc(requestThreads,*numThreads * sizeof(pthread_t))) == NULL){
+		perror("Error Reallocating Memory for threads\n");
+		exit(2);
+	}
+	for (; j < *numThreads;j++){
+		threadsAvailable[j] = 1;
+	}
+	printf("Memory Reallocated\n");
+}
+
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * Function to process request readed and create a new thread that calls 
+ * handleRequest
+ *
+ * @param requestThreads array of all threads
+ * @param requestToRead request readed to be processed
+ * @param nextTheadAvailable id of one thread available to be used
+ * @param maxIdUsed number to know what is the max number of threads used simultaneously
+ */
+void processRequest(pthread_t *requestThreads,
+					Request* requestToRead,
+					int* nextThreadAvailable,
+					int* maxIdUsed)
+{
+	printf("Process new request\n");
+	RequestWrapper requestWrapper;
+	requestWrapper.request = *requestToRead;
+	requestWrapper.threadID = *nextThreadAvailable;
+	pthread_t threadAvailable = requestThreads[*nextThreadAvailable];
+	pthread_create(&threadAvailable, NULL, handleRequest, &requestWrapper);
+	threadsAvailable[*nextThreadAvailable] = 0;
+	if (*nextThreadAvailable > *maxIdUsed){
+		*maxIdUsed = *nextThreadAvailable;
+	}
+	printf("Created thread %d\n", *nextThreadAvailable);
+}
+
+//------------------------------------------------------------------------------------------------------//
+
+
+/**
+ * This program is a sauna manager. He receives requests to enter the sauna and then accepts
+ * or rejects requests sent to the generator. In case of refusing requests these may be
+ * because there is no space in the sauna or if the person inside the sauna is of the opposite sex.
+ * 
+ * Main function:
+ *  1) create and inizialize one semaphore to synchronize the threads of program
+ *  2) open one FIFO to receive request
+ *  3) create a array of all threads to be used
+ *  4) read request
+ *  5) process request
+ *  6) when all done clean all memory used
+ * 
+ * @param argc number of arguments
+ * @param argv arrays of arguments
+ */
+int main(int argc, char const *argv[]) {
+	/* code */
+	if (argc != 2){
+		printf("Usage: sauna <n_lugares>\n");
+		return 1;
+	}
+	sscanf(argv[1], "%d", &totalSeats);
+	printf("Total Seats available = %d\n",totalSeats);
+	createAndInitializeSem();
+	int fifo_req;
+	createAndOpenFIFO_REQ(&fifo_req);
+
+	int numThreads = totalSeats;
+	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads);
+	threadsAvailable = malloc(sizeof(int)*numThreads);
+	initAvailableThreads(numThreads);
+	printf("Allocated initial threads\n");
+	int maxIdUsed = -1;
+    
+	Request requestToRead;
+	int n = 1;
+	while(n>0){
+		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
+		int nextThreadAvailable = findNextAvailableThread(numThreads);
+		if (nextThreadAvailable == -1){
+			reallocMemory(requestThreads, &numThreads);
+			nextThreadAvailable = findNextAvailableThread(numThreads);
+		}
+		if (n > 0){
+			processRequest(requestThreads, &requestToRead, &nextThreadAvailable, &maxIdUsed);
+		}
+	}
+
+	freeResources(requestThreads, &maxIdUsed);
+	printStatus();
 	return 0;
 }
