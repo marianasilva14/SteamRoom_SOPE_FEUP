@@ -99,15 +99,17 @@ int isStillProcessing(){
 /**
  * This function opens the FIFO which will be used to send the requests.
  * @param fifo_req A null-pointer to an int that will be assigned to the FIFO that will be opened.
+ * @param fifo_name The name of the FIFO to open.
+ * @param flags The flags to use to open the FIFO.
  * @return -1 in case of error, 0 in case of success.
  */
-int openFifoToSendRequests(int *fifo_req){
+int openFifo(int *fifo_req, char *fifo_name, int flags){
   int triesToOpenFifo = 0;
-  while((*fifo_req=open(fifo_entrada,O_WRONLY))==-1){
+  while((*fifo_req=open(fifo_name,flags))==-1){
     sleep(1);
     triesToOpenFifo++;
     if (triesToOpenFifo > 4){
-      perror("Failed to Open Fifo To Send Requests\n");
+      perror("Failed to Open Fifo\n");
       return -1;
     }
   }
@@ -180,7 +182,7 @@ void writeRequestInFifo(int fifo_req,Request *request){
  */
 void * generateRequests(void * args){
   int fifo_req;
-  if (openFifoToSendRequests(&fifo_req)==-1){
+  if (openFifo(&fifo_req,fifo_entrada,O_WRONLY)==-1){
     return NULL;
   }
   int requestCounter = 0;
@@ -202,7 +204,6 @@ void * generateRequests(void * args){
 
     }
   }
-
   return NULL;
 }
 
@@ -211,22 +212,50 @@ void * generateRequests(void * args){
 
 
 /**
+ * This function updates the state of a discarded request, updates the missResponse value
+ * and updates the discardedRejections arrays.
+ *
+ * @param discarded A pointer to the request that should be discarded.
+ */
+void handleDiscardedRequest(Request *discarded){
+  discarded->state = DESCARTADO;
+  pthread_mutex_lock(&mrMtx);
+  missResponse--;
+  pthread_mutex_unlock(&mrMtx);
+  if (discarded->gender == 'M'){
+    discardedRejections[0]++;
+  }else{
+    discardedRejections[1]++;
+  }
+}
+
+/**
+ * Function that is responsible for updating the tries of a Request and the rejectedQueue;
+ * It also calls a function to handle discarded requests.
+ * @param rejected A pointer to the rejected request,
+ */
+void handleRejectedRequest(Request *rejected){
+  rejected->tries++;
+  if (rejected->tries > 3){
+    handleDiscardedRequest(rejected);
+  }
+  else{
+    pthread_mutex_lock(&queueMtx);
+    rejectedQueue[queueIndex++] = *rejected;
+    pthread_mutex_unlock(&queueMtx);
+  }
+  printRegistrationMessages(*rejected);
+}
+
+
+/**
  * Function that is responsible for handling requests that are rejected by the sauna program and
  * if the number of rejections of a given request exceeds 3, it is discarded
- * @param args
+ * @param args NULL-not used
  */
-void * handleRejected(void * args){
-  int triesToOpenFifo = 0;
+void * handleSaunaReply(void * args){
   int fifo_ans;
-  while((fifo_ans=open(fifo_rejeitados,O_RDONLY))==-1){
-    //sleep(1);
-    triesToOpenFifo++;
-    sleep(1);
-    if (triesToOpenFifo > 4){
-      perror("Failed to Open Fifo Rejected\n");
-      return NULL;
-    }
-  }
+  openFifo(&fifo_ans,fifo_rejeitados,O_RDONLY);
   Request rejected;
   while (isStillProcessing()){
     read(fifo_ans, &rejected, sizeof(rejected));
@@ -235,24 +264,7 @@ void * handleRejected(void * args){
     pthread_mutex_unlock(&mrMtx);
     if(rejected.state == REJEITADO)
     {
-      rejected.tries++;
-      if (rejected.tries > 3){
-        rejected.state = DESCARTADO;
-        pthread_mutex_lock(&mrMtx);
-        missResponse--;
-        pthread_mutex_unlock(&mrMtx);
-        if (rejected.gender == 'M'){
-          discardedRejections[0]++;
-        }else{
-          discardedRejections[1]++;
-        }
-      }
-      else{
-        pthread_mutex_lock(&queueMtx);
-        rejectedQueue[queueIndex++] = rejected;
-        pthread_mutex_unlock(&queueMtx);
-      }
-      printRegistrationMessages(rejected);
+      handleRejectedRequest(&rejected);
     }
     else{
       pthread_mutex_lock(&mrMtx);
@@ -326,9 +338,9 @@ void createFifoToReceiveAwnsers(){
  * @param requestThread pointer to the thread responsible for generating requests.
  * @param rejectedThread pointer to the thread responsible for handling rejected requests.
  */
-void createThreads(pthread_t *requestThread, pthread_t *rejectedThread){
+void createThreads(pthread_t *requestThread, pthread_t *replyThread){
   pthread_create(requestThread, NULL, generateRequests,NULL);
-  pthread_create(rejectedThread, NULL, handleRejected, NULL);
+  pthread_create(replyThread, NULL, handleSaunaReply, NULL);
 }
 
 /**
@@ -338,9 +350,9 @@ void createThreads(pthread_t *requestThread, pthread_t *rejectedThread){
  * @param requestThread pointer to the thread responsible for generating requests.
  * @param rejectedThread pointer to the thread responsible for handling rejected requests.
  */
-void waitAndTerminateThreads(pthread_t *requestThread,pthread_t *rejectedThread){
+void waitAndTerminateThreads(pthread_t *requestThread,pthread_t *replyThread){
   pthread_join(*requestThread, NULL);
-  pthread_join(*rejectedThread, NULL);
+  pthread_join(*replyThread, NULL);
 
 }
 
@@ -348,9 +360,9 @@ void waitAndTerminateThreads(pthread_t *requestThread,pthread_t *rejectedThread)
  * handleThreads() is responsible for creating the necessary threads, wait and terminate them.
  */
 void handleThreads( ){
-  pthread_t requestThread, rejectedThread;
-  createThreads(&requestThread,&rejectedThread);
-  waitAndTerminateThreads(&requestThread,&rejectedThread);
+  pthread_t requestThread, replyThread;
+  createThreads(&requestThread,&replyThread);
+  waitAndTerminateThreads(&requestThread,&replyThread);
 }
 
 /**
