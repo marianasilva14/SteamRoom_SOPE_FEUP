@@ -139,6 +139,7 @@ void timeval_subtract(struct timeval *result, struct timeval *t2, struct timeval
 /**
  * Function that verifies the gender of the person making the request
  * And if actual gender is define as N will be change to the requestGender
+ *
  * @param gender of the person making the request
  */
 int checkGender(char requestGender){
@@ -157,6 +158,13 @@ int checkGender(char requestGender){
 
 //------------------------------------------------------------------------------------------------------//
 
+
+/**
+ * Function that increment value on array of int, that correspond to a counter
+ *
+ * @param gender of the person to increment on array
+ * @param arrayOfGender array that is one counter of genders
+ */
 void incrementGender(char gender, int * arrayOfGender){
 	if (gender == 'M'){
 		pthread_mutex_lock(&arraysMtx);
@@ -172,6 +180,12 @@ void incrementGender(char gender, int * arrayOfGender){
 
 //------------------------------------------------------------------------------------------------------//
 
+
+/**
+ * Function to reject one request and increment the counter of request rejecteds
+ *
+ * @param requestToRead request to reject
+ */
 void rejectRequest(Request* requestToRead){
 	(*requestToRead).state = REJEITADO;
 	printf("Sauna: Rejecting Request, SEX:%c\n",(*requestToRead).gender);
@@ -181,6 +195,10 @@ void rejectRequest(Request* requestToRead){
 
 //------------------------------------------------------------------------------------------------------//
 
+
+/**
+ * Function to set actualGender to default value if sauna is empty
+ */
 void actualGenderToDefault(){
 	int semValue;
 	if (sem_getvalue(sem, &semValue) == -1){
@@ -197,6 +215,15 @@ void actualGenderToDefault(){
 
 //------------------------------------------------------------------------------------------------------//
 
+
+/**
+ * Function to try open fifo, but if can't open FIFO the function set the thread as available for
+ * do other stuff and close.
+ *
+ * @param fifo_name name of FIFO to try open
+ * @param fifo_ans is the fifo if it was opened correctly
+ * @param threadID ID of thread to set as available
+ */
 int open_FIFO(char* fifo_name, int* fifo_ans, int threadID){
 	int numTries = 0;
 	while ((*fifo_ans = open(fifo_name,O_WRONLY))==-1){
@@ -213,6 +240,14 @@ int open_FIFO(char* fifo_name, int* fifo_ans, int threadID){
 
 //------------------------------------------------------------------------------------------------------//
 
+
+/**
+ * Function to send the response of request to gerador, first try to open the fifo to response
+ * and after send the response
+ *
+ * @param requestToRead request already processed and ready to be sent to gerador
+ * @param threadID ID of thread needed for open_FIFO
+ */
 void sendResponse(Request requestToRead, int threadID){
 	int fifo_ans;
 	if(open_FIFO(requestToRead.fifo_name, &fifo_ans, threadID)){
@@ -228,6 +263,9 @@ void sendResponse(Request requestToRead, int threadID){
 }
 
 //------------------------------------------------------------------------------------------------------//
+
+
+//TODO: COMMENT I DONT NO WHAT SAY ABAOUT THIS :/
 void restInSauna(Request requestToRead, struct timeval* tvBegin){
 	struct timeval tvEnd, tvDiff;
   	int elapsedMiliseconds = 0;
@@ -284,6 +322,8 @@ void* handleRequest(void * args){
 	return NULL;
 }
 
+//------------------------------------------------------------------------------------------------------//
+
 
 /**
 *	Function to initialize the array of int to know if one thread is available to use
@@ -295,6 +335,8 @@ void initAvailableThreads(int numThreads){
 		threadsAvailable[i] = 1;
 	}
 }
+
+//------------------------------------------------------------------------------------------------------//
 
 
 /**
@@ -311,9 +353,8 @@ int findNextAvailableThread(int numThreads){
 	return -1;
 }
 
+
 //------------------------------------------------------------------------------------------------------//
-
-
 
 int main(int argc, char const *argv[]) {
 	/* code */
