@@ -63,6 +63,8 @@ pthread_mutex_t writeFileMtx = PTHREAD_MUTEX_INITIALIZER;
 int *threadsAvailable;
 FILE *logFile;
 pid_t pid;
+char nameOfFifoAns[100];
+int fifo_ans = -1;
 
 
 //------------------------------------------------------------------------------------------------------//
@@ -255,9 +257,9 @@ void actualGenderToDefault(){
  * @param fifo_ans is the fifo if it was opened correctly
  * @param threadID ID of thread to set as available
  */
-int open_FIFO(char* fifo_name, int* fifo_ans, int threadID){
+int open_FIFO(char* fifo_name, int threadID){
 	int numTries = 0;
-	while ((*fifo_ans = open(fifo_name,O_WRONLY))==-1){
+	while ((fifo_ans = open(fifo_name,O_WRONLY))==-1){
 		numTries++;
 		printf("Sauna: Error opening fifo awnser, try number %d\n",numTries);
 		sleep(1);
@@ -280,15 +282,24 @@ int open_FIFO(char* fifo_name, int* fifo_ans, int threadID){
  * @param threadID ID of thread needed for open_FIFO
  */
 void sendResponse(Request requestToRead, int threadID){
-	int fifo_ans;
-	printf("opening fifo_ans\n");
-	pthread_mutex_lock(&fifoMtx);
-	if(open_FIFO(requestToRead.fifo_name, &fifo_ans, threadID)){
-		perror("Opening FIFO");
-		pthread_mutex_unlock(&fifoMtx);
-		sem_post(sem);
-		exit(2);
+	if (strcmp(nameOfFifoAns,requestToRead.fifo_name) != 0){
+		printf("New Fifo Ans Detected\n");
+		if (fifo_ans != -1){
+			close(fifo_ans);
+		}
+		strcpy(nameOfFifoAns,requestToRead.fifo_name);
+		printf("opening fifo_ans\n");
+		if(open_FIFO(requestToRead.fifo_name, threadID)){
+			perror("Opening FIFO");
+			pthread_mutex_unlock(&fifoMtx);
+			sem_post(sem);
+			exit(2);
+		}
 	}
+
+
+	pthread_mutex_lock(&fifoMtx);
+
 	printf("writing into fifo_ans\n");
 	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) == -1){
 		perror("Writing Awnser Error\n");
@@ -296,6 +307,7 @@ void sendResponse(Request requestToRead, int threadID){
 		sem_post(sem);
 		exit(2);
 	}
+
 	pthread_mutex_unlock(&fifoMtx);
 	printf("Sent info back to generator\n");
 }
@@ -309,8 +321,6 @@ void sendResponse(Request requestToRead, int threadID){
  * of sleeping (which measures processor time), this function measures time elaped,
  * because this way it is more reallistic.
  *
- * @param requestToRead request already processed and ready to be sent to gerador
- * @param threadID ID of thread needed to open_FIFO
  */
 void restInSauna(Request requestToRead, struct timeval* tvBegin){
 	struct timeval tvEnd, tvDiff;
@@ -472,6 +482,8 @@ void freeResources(pthread_t *requestThreads, int* maxIdUsed){
 	printf("Semaphore Destroyed\n");
 	unlink(fifo_entrada);
 	printf("Destryoed FIFO\n");
+	close(fifo_ans);
+	printf("Closed FIFO ANS\n");
 }
 
 //------------------------------------------------------------------------------------------------------//
