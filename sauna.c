@@ -286,12 +286,14 @@ void sendResponse(Request requestToRead, int threadID){
 	if(open_FIFO(requestToRead.fifo_name, &fifo_ans, threadID)){
 		perror("Opening FIFO");
 		pthread_mutex_unlock(&fifoMtx);
+		sem_post(sem);
 		exit(2);
 	}
 	printf("writing into fifo_ans\n");
 	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) == -1){
 		perror("Writing Awnser Error\n");
 		pthread_mutex_unlock(&fifoMtx);
+		sem_post(sem);
 		exit(2);
 	}
 	pthread_mutex_unlock(&fifoMtx);
