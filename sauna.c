@@ -61,6 +61,8 @@ pthread_mutex_t arraysReqSerMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t fifoMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t writeFileMtx = PTHREAD_MUTEX_INITIALIZER;
 int *threadsAvailable;
+FILE *logFile;
+pid_t pid;
 
 
 //------------------------------------------------------------------------------------------------------//
@@ -93,6 +95,31 @@ void printStatus(){
 
 //------------------------------------------------------------------------------------------------------//
 
+/**
+ * Closes Log File. Should be called at the end of the program.
+ */
+void closeLogFile(){
+		fclose(logFile);
+}
+
+/**
+ * Open log file. Should be called at the beggining of the program execution.
+ */
+void openLogFile(){
+	pid = getpid();
+	char location[100];
+	sprintf(location,"/tmp/bal.%d",pid);
+	int triesToOpen = 0;
+	while ( (logFile = fopen(location, "a")) == NULL)
+	{
+		sleep(1);
+		triesToOpen++;
+		if (triesToOpen>4){
+			perror("Error opening log file!\n");
+			exit(1);
+		}
+	}
+}
 
 /**
  * This function is responsible for issuing log messages to a /tmp/bar.pid file that documents the
@@ -100,10 +127,6 @@ void printStatus(){
  * @param request
  */
 void printRegistrationMessages(Request r1){
-	pid_t pid = getpid();
-	char location[100];
-	sprintf(location,"/tmp/bal.%d",pid);
-
 	char tip[10];
 	switch (r1.state){
 	case PEDIDO:
@@ -118,25 +141,10 @@ void printRegistrationMessages(Request r1){
     default:
     	break;
 	}
-
-	pthread_mutex_lock(&writeFileMtx);
-	FILE *logFile = fopen(location, "a");
-	int triesToOpen = 0;
-	while (logFile == NULL)
-	{
-		sleep(1);
-		triesToOpen++;
-		logFile = fopen(location, "a");
-		if (triesToOpen>4){
-			printf("Error opening file!\n");
-			pthread_mutex_unlock(&writeFileMtx);
-			exit(1);
-		}
-	}
 	time_t raw_time;
 	time(&raw_time);
+	pthread_mutex_lock(&writeFileMtx);
 	fprintf(logFile,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
-	fclose(logFile);
 	pthread_mutex_unlock(&writeFileMtx);
 }
 
@@ -442,7 +450,7 @@ void createAndOpenFIFO_REQ(int* fifo_req){
 
 /**
  * Function to release all resources used
- * 
+ *
  * @param requestThreads array of threads to be released
  * @param maxIdUsed number of threads on array
  */
@@ -469,7 +477,7 @@ void freeResources(pthread_t *requestThreads, int* maxIdUsed){
 
 /**
  * Function to realloc memory of the array of threads to double
- * 
+ *
  * @param requestThreads array of threads to be realloced
  * @param numThreads size of array before realloc
  */
@@ -491,7 +499,7 @@ void reallocMemory(pthread_t* requestThreads, int* numThreads){
 
 
 /**
- * Function to process request readed and create a new thread that calls 
+ * Function to process request readed and create a new thread that calls
  * handleRequest
  *
  * @param requestThreads array of all threads
@@ -524,7 +532,7 @@ void processRequest(pthread_t *requestThreads,
  * This program is a sauna manager. He receives requests to enter the sauna and then accepts
  * or rejects requests sent to the generator. In case of refusing requests these may be
  * because there is no space in the sauna or if the person inside the sauna is of the opposite sex.
- * 
+ *
  * Main function:
  *  1) create and inizialize one semaphore to synchronize the threads of program
  *  2) open one FIFO to receive request
@@ -532,7 +540,7 @@ void processRequest(pthread_t *requestThreads,
  *  4) read request
  *  5) process request
  *  6) when all done clean all memory used
- * 
+ *
  * @param argc number of arguments
  * @param argv arrays of arguments
  */
@@ -547,14 +555,14 @@ int main(int argc, char const *argv[]) {
 	createAndInitializeSem();
 	int fifo_req;
 	createAndOpenFIFO_REQ(&fifo_req);
-
+	openLogFile();
 	int numThreads = totalSeats;
 	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads);
 	threadsAvailable = malloc(sizeof(int)*numThreads);
 	initAvailableThreads(numThreads);
 	printf("Allocated initial threads\n");
 	int maxIdUsed = -1;
-    
+
 	Request requestToRead;
 	int n = 1;
 	while(n>0){
