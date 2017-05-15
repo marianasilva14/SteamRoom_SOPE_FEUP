@@ -572,10 +572,10 @@ int main(int argc, char const *argv[]) {
 			exit(2);
 		}
 		int nextThreadAvailable = findNextAvailableThread(numThreads);
-		/*if (nextThreadAvailable == -1){
+		if (nextThreadAvailable == -1){
 			reallocMemory(requestThreads, &numThreads);
 			nextThreadAvailable = findNextAvailableThread(numThreads);
-		}*/
+		}
 		if (n > 0){
 			processRequest(requestThreads, &requestToRead, &nextThreadAvailable, &maxIdUsed);
 		}
