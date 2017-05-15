@@ -55,6 +55,11 @@ int rejectionsReceived[2] = {0};
 int requestsServed[2] = {0};
 pthread_mutex_t genderMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t arraysMtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t arraysRejMtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t arraysReqRecMtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t arraysReqSerMtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t fifoMtx = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t writeFileMtx = PTHREAD_MUTEX_INITIALIZER;
 int *threadsAvailable;
 
 
@@ -98,20 +103,6 @@ void printRegistrationMessages(Request r1){
 	pid_t pid = getpid();
 	char location[100];
 	sprintf(location,"/tmp/bal.%d",pid);
-	FILE *logFile = fopen(location, "a");
-	int triesToOpen = 0;
-	while (logFile == NULL)
-	{
-		sleep(1);
-		triesToOpen++;
-		logFile = fopen(location, "a");
-		if (triesToOpen>4){
-			printf("Error opening file!\n");
-			exit(1);
-		}
-	}
-	time_t raw_time;
-	time(&raw_time);
 
 	char tip[10];
 	switch (r1.state){
@@ -127,8 +118,26 @@ void printRegistrationMessages(Request r1){
     default:
     	break;
 	}
+
+	pthread_mutex_lock(&writeFileMtx);
+	FILE *logFile = fopen(location, "a");
+	int triesToOpen = 0;
+	while (logFile == NULL)
+	{
+		sleep(1);
+		triesToOpen++;
+		logFile = fopen(location, "a");
+		if (triesToOpen>4){
+			printf("Error opening file!\n");
+			pthread_mutex_unlock(&writeFileMtx);
+			exit(1);
+		}
+	}
+	time_t raw_time;
+	time(&raw_time);
 	fprintf(logFile,"%lu -%d -%d : %c -%d %s\n", raw_time,pid,r1.requestID,r1.gender,r1.requestTime,tip);
 	fclose(logFile);
+	pthread_mutex_unlock(&writeFileMtx);
 }
 
 
@@ -183,14 +192,10 @@ int checkGender(char requestGender){
  */
 void incrementGender(char gender, int * arrayOfGender){
 	if (gender == 'M'){
-		pthread_mutex_lock(&arraysMtx);
 		arrayOfGender[0]++;
-		pthread_mutex_unlock(&arraysMtx);
 	}
 	else{
-		pthread_mutex_lock(&arraysMtx);
 		arrayOfGender[1]++;
-		pthread_mutex_unlock(&arraysMtx);
 	}
 }
 
@@ -206,7 +211,9 @@ void rejectRequest(Request* requestToRead){
 	(*requestToRead).state = REJEITADO;
 	printf("Sauna: Rejecting Request, SEX:%c\n",(*requestToRead).gender);
 
+	pthread_mutex_lock(&arraysRejMtx);
 	incrementGender((*requestToRead).gender, rejectionsReceived);
+	pthread_mutex_unlock(&arraysRejMtx);
 }
 
 //------------------------------------------------------------------------------------------------------//
@@ -266,15 +273,20 @@ int open_FIFO(char* fifo_name, int* fifo_ans, int threadID){
  */
 void sendResponse(Request requestToRead, int threadID){
 	int fifo_ans;
+	printf("opening fifo_ans\n");
+	pthread_mutex_lock(&fifoMtx);
 	if(open_FIFO(requestToRead.fifo_name, &fifo_ans, threadID)){
 		perror("Opening FIFO");
+		pthread_mutex_unlock(&fifoMtx);
 		exit(2);
 	}
-
+	printf("writing into fifo_ans\n");
 	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) == -1){
 		perror("Writing Awnser Error\n");
+		pthread_mutex_unlock(&fifoMtx);
 		exit(2);
 	}
+	pthread_mutex_unlock(&fifoMtx);
 	printf("Sent info back to generator\n");
 }
 
@@ -318,20 +330,22 @@ void* handleRequest(void * args){
 	Request requestToRead = requestWrapper.request;
 	int threadID = requestWrapper.threadID;
 
+	pthread_mutex_unlock(&arraysReqRecMtx);
 	incrementGender(requestToRead.gender, requestsReceived);
+	pthread_mutex_unlock(&arraysReqRecMtx);
 
 	if (checkGender(requestToRead.gender)){
 		printf("Sauna: Accepting Request, SEX:%c\n",requestToRead.gender);
-		if (sem_wait(sem)==-1){
+		/*if (sem_wait(sem)==-1){
 			perror("sem_wait(sem)\n");
 			exit(2);
-		}
+		}*/
 		gettimeofday(&tvBegin, NULL);
 		requestToRead.state = ACEITE;
+		pthread_mutex_unlock(&arraysReqSerMtx);
 		incrementGender(requestToRead.gender, requestsServed);
+		pthread_mutex_unlock(&arraysReqSerMtx);
 		restInSauna(requestToRead, &tvBegin);
-		sem_post(sem);
-		actualGenderToDefault();
 	}
 	else{
 		rejectRequest(&requestToRead);
@@ -342,6 +356,8 @@ void* handleRequest(void * args){
 
 	printf("Thread %d is now available\n",threadID);
 	threadsAvailable[threadID] = 1;
+	sem_post(sem);
+	actualGenderToDefault();
 	return NULL;
 }
 
@@ -543,11 +559,15 @@ int main(int argc, char const *argv[]) {
 	int n = 1;
 	while(n>0){
 		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
+		if (sem_wait(sem)==-1){
+			perror("sem_wait(sem)\n");
+			exit(2);
+		}
 		int nextThreadAvailable = findNextAvailableThread(numThreads);
-		if (nextThreadAvailable == -1){
+		/*if (nextThreadAvailable == -1){
 			reallocMemory(requestThreads, &numThreads);
 			nextThreadAvailable = findNextAvailableThread(numThreads);
-		}
+		}*/
 		if (n > 0){
 			processRequest(requestThreads, &requestToRead, &nextThreadAvailable, &maxIdUsed);
 		}
