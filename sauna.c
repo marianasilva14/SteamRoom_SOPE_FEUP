@@ -63,9 +63,10 @@ pthread_mutex_t writeFileMtx = PTHREAD_MUTEX_INITIALIZER;
 int *threadsAvailable;
 FILE *logFile;
 pid_t pid;
-char nameOfFifoAns[100];
-int fifo_ans = -1;
-
+int numberOfFIFOs = 10;
+int fifo_array[10];
+char namesOfFifos[10][100];
+int FIFOS_ITER = 0;
 
 //------------------------------------------------------------------------------------------------------//
 
@@ -257,15 +258,15 @@ void actualGenderToDefault(){
  * @param fifo_ans is the fifo if it was opened correctly
  * @param threadID ID of thread to set as available
  */
-int open_FIFO(char* fifo_name, int threadID){
+int open_FIFO(char* fifo_name, int *fifo_ans, int threadID){
 	int numTries = 0;
-	while ((fifo_ans = open(fifo_name,O_WRONLY))==-1){
+	while ((*fifo_ans = open(fifo_name,O_WRONLY))==-1){
 		numTries++;
 		printf("Sauna: Error opening fifo awnser, try number %d\n",numTries);
 		sleep(1);
 		if (numTries > 4){
 			threadsAvailable[threadID] = 1;
-			return 1;
+			return -1;
 		}
 	}
 	return 0;
@@ -273,6 +274,17 @@ int open_FIFO(char* fifo_name, int threadID){
 
 //------------------------------------------------------------------------------------------------------//
 
+
+
+int getIndexOfFifo(char *fifo_name){
+	int i;
+	for (i=0; i <= FIFOS_ITER;i++){
+		if (strcmp(fifo_name,namesOfFifos[i])==0){
+			return i;
+		}
+	}
+	return -1;
+}
 
 /**
  * Function to send the response of request to gerador, first try to open the fifo to response
@@ -282,27 +294,27 @@ int open_FIFO(char* fifo_name, int threadID){
  * @param threadID ID of thread needed for open_FIFO
  */
 void sendResponse(Request requestToRead, int threadID){
-	if (strcmp(nameOfFifoAns,requestToRead.fifo_name) != 0){
-		printf("New Fifo Ans Detected\n");
-		if (fifo_ans != -1){
-			close(fifo_ans);
-		}
-		strcpy(nameOfFifoAns,requestToRead.fifo_name);
-		printf("opening fifo_ans\n");
-		if(open_FIFO(requestToRead.fifo_name, threadID)){
+
+	pthread_mutex_lock(&fifoMtx);
+	int current_fifo = getIndexOfFifo(requestToRead.fifo_name);
+	if (current_fifo == -1){
+		printf("New Fifo Ans Detected, Opening it\n");
+		if(open_FIFO(requestToRead.fifo_name, &current_fifo,threadID)==-1){
 			perror("Opening FIFO");
 			pthread_mutex_unlock(&fifoMtx);
 			sem_post(sem);
 			exit(2);
 		}
+		strcpy(namesOfFifos[FIFOS_ITER],requestToRead.fifo_name);
+		fifo_array[FIFOS_ITER++] = current_fifo;
+	}
+	else{
+		current_fifo = fifo_array[current_fifo];
 	}
 
-
-	pthread_mutex_lock(&fifoMtx);
-
 	printf("writing into fifo_ans\n");
-	if (write(fifo_ans, &requestToRead, sizeof(requestToRead)) == -1){
-		perror("Writing Awnser Error\n");
+	if (write(current_fifo, &requestToRead, sizeof(requestToRead)) == -1){
+		perror("Writing Awnser Error");
 		pthread_mutex_unlock(&fifoMtx);
 		sem_post(sem);
 		exit(2);
@@ -482,8 +494,6 @@ void freeResources(pthread_t *requestThreads, int* maxIdUsed){
 	printf("Semaphore Destroyed\n");
 	unlink(fifo_entrada);
 	printf("Destryoed FIFO\n");
-	close(fifo_ans);
-	printf("Closed FIFO ANS\n");
 }
 
 //------------------------------------------------------------------------------------------------------//
