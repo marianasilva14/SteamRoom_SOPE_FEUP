@@ -362,7 +362,7 @@ void* handleRequest(void * args){
 	Request requestToRead = requestWrapper.request;
 	int threadID = requestWrapper.threadID;
 
-	pthread_mutex_unlock(&arraysReqRecMtx);
+	pthread_mutex_lock(&arraysReqRecMtx);
 	incrementGender(requestToRead.gender, requestsReceived);
 	pthread_mutex_unlock(&arraysReqRecMtx);
 
@@ -374,7 +374,7 @@ void* handleRequest(void * args){
 		}*/
 		gettimeofday(&tvBegin, NULL);
 		requestToRead.state = ACEITE;
-		pthread_mutex_unlock(&arraysReqSerMtx);
+		pthread_mutex_lock(&arraysReqSerMtx);
 		incrementGender(requestToRead.gender, requestsServed);
 		pthread_mutex_unlock(&arraysReqSerMtx);
 		restInSauna(requestToRead, &tvBegin);
@@ -513,6 +513,7 @@ void reallocMemory(pthread_t* requestThreads, int* numThreads){
 		perror("Error Reallocating Memory for threads\n");
 		exit(2);
 	}
+	threadsAvailable = realloc(threadsAvailable,*numThreads*sizeof(int));
 	for (; j < *numThreads;j++){
 		threadsAvailable[j] = 1;
 	}
@@ -581,7 +582,7 @@ int main(int argc, char const *argv[]) {
 	createAndOpenFIFO_REQ(&fifo_req);
 	openLogFile();
 	int numThreads = totalSeats;
-	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads);
+	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads * 100);
 	threadsAvailable = malloc(sizeof(int)*numThreads);
 	initAvailableThreads(numThreads);
 	printf("Allocated initial threads\n");
@@ -589,19 +590,31 @@ int main(int argc, char const *argv[]) {
 
 	Request requestToRead;
 	int n = 1;
-	while(n>0){
+	int readI = 1;
+	while(n>=0){
 		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
-		if (sem_wait(sem)==-1){
-			perror("sem_wait(sem)\n");
-			exit(2);
-		}
-		int nextThreadAvailable = findNextAvailableThread(numThreads);
-		if (nextThreadAvailable == -1){
-			reallocMemory(requestThreads, &numThreads);
-			nextThreadAvailable = findNextAvailableThread(numThreads);
-		}
-		if (n > 0){
+		if(n>0){
+			readI = 1;
+			if (sem_wait(sem)==-1){
+				perror("sem_wait(sem)\n");
+				exit(2);
+			}
+			int nextThreadAvailable = findNextAvailableThread(numThreads);
+			if (nextThreadAvailable == -1){
+				reallocMemory(requestThreads, &numThreads);
+				nextThreadAvailable = findNextAvailableThread(numThreads);
+			}
 			processRequest(requestThreads, &requestToRead, &nextThreadAvailable, &maxIdUsed);
+		}
+		else if(n==0 && readI){
+			printf("Do you want to exit? (Y/N)\n");
+			char response;
+			scanf("%c", &response);
+			if(response == 'y' || response == 'Y')
+				break;
+			else if(response == 'n' || response == 'N'){
+				readI = 0;
+			}
 		}
 	}
 
