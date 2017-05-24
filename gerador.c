@@ -64,16 +64,16 @@ void printRegistrationMessages(Request r1){
   time_t raw_time;
   time(&raw_time);
 
-  char tip[10];
+  char tip[11];
   switch (r1.state){
     case PEDIDO:
-    strcpy(tip,"PEDIDO");
+    strncpy(tip,"PEDIDO",7);
     break;
     case REJEITADO:
-    strcpy(tip,"REJEITADO");
+    strncpy(tip,"REJEITADO",9);
     break;
     case DESCARTADO:
-    strcpy(tip,"DESCARTADO");
+    strncpy(tip,"DESCARTADO",11);
     default:
     break;
   }
@@ -386,15 +386,17 @@ void readSleepTimeBetweenRequests(int argc, char const *argv[]){
  * @param argc The number of arguments read when program was lauched.
  * @param argv The arguments read when program was launched.
  */
-void readConsoleArguments(int argc, char const *argv[]){
+int readConsoleArguments(int argc, char const *argv[]){
   if (argc > 2 && argc < 5){
     sscanf(argv[1], "%d", &missResponse);
     sscanf(argv[2], "%d", &maxUtilizationTime);
     readSleepTimeBetweenRequests(argc,argv);
+    return 0;
   }
   else{
     printf("Invalid number of arguments\n");
     printf("Example of how to run: 'gerador <n_pedidos> <tempo_max_utilizacao> <tempo_entre_geracao_pedidos>(optional)'\n");
+    return 1;
   }
 
 }
@@ -409,7 +411,8 @@ void readConsoleArguments(int argc, char const *argv[]){
  */
 int main(int argc, char const *argv[]) {
   srand(time(NULL));
-  readConsoleArguments(argc,argv);
+  if(readConsoleArguments(argc,argv))
+    return 1;
   remainingRequests = missResponse;
   rejectedQueue = malloc(missResponse * sizeof(Request));
   setLogFile();
