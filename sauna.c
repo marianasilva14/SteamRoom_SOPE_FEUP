@@ -45,7 +45,6 @@ int requestsReceived[2] = {0};// M-0, F-1
 int rejectionsReceived[2] = {0};
 int requestsServed[2] = {0};
 pthread_mutex_t genderMtx = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t arraysMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t arraysRejMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t arraysReqRecMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t arraysReqSerMtx = PTHREAD_MUTEX_INITIALIZER;
@@ -66,23 +65,31 @@ int FIFOS_ITER = 0;
  * of rejections and the number of requests served (total and by gender).
  */
 void printStatus(){
-	pthread_mutex_lock(&arraysMtx);
-	int totalReceived = requestsReceived[0] + requestsReceived[1];
-	int totalRejections = rejectionsReceived[0] + rejectionsReceived[1];
-	int totalServed = requestsServed[0] + requestsServed[1];
-	printf("Pedidos Recebidos: Total- %d, M- %d, F- %d\n",
-		totalReceived,
-		requestsReceived[0],
-		requestsReceived[1]);
-	printf("Rejeicoes: Total- %d, M- %d, F- %d\n",
-		totalRejections,
-		rejectionsReceived[0],
-		rejectionsReceived[1]);
-	printf("Pedidos servidos: Total- %d, M- %d, F- %d\n",
-		totalServed,
-		requestsServed[0],
-		requestsServed[1]);
-	pthread_mutex_unlock(&arraysMtx);
+	int totalReceived,totalRejections,totalServed;
+	pthread_mutex_lock(&arraysReqRecMtx);
+		totalReceived = requestsReceived[0] + requestsReceived[1];
+		printf("Pedidos Recebidos: Total- %d, M- %d, F- %d\n",
+			totalReceived,
+			requestsReceived[0],
+			requestsReceived[1]);
+	pthread_mutex_unlock(&arraysReqRecMtx);
+
+	pthread_mutex_lock(&arraysRejMtx);
+		totalRejections = rejectionsReceived[0] + rejectionsReceived[1];
+		printf("Rejeicoes: Total- %d, M- %d, F- %d\n",
+			totalRejections,
+			rejectionsReceived[0],
+			rejectionsReceived[1]);
+	pthread_mutex_unlock(&arraysRejMtx);
+
+	pthread_mutex_lock(&arraysReqSerMtx);
+		totalServed = requestsServed[0] + requestsServed[1];
+		printf("Pedidos servidos: Total- %d, M- %d, F- %d\n",
+			totalServed,
+			requestsServed[0],
+			requestsServed[1]);
+	pthread_mutex_unlock(&arraysReqSerMtx);
+
 }
 
 
@@ -348,10 +355,6 @@ void restInSauna(Request *requestToRead){
 void* handleRequest(void * args){
 	Request requestToRead = *(Request*) args;
 
-	pthread_mutex_lock(&arraysReqRecMtx);
-	incrementGender(requestToRead.gender, requestsReceived);
-	pthread_mutex_unlock(&arraysReqRecMtx);
-
 	printf("Sauna: Handle Request, SEX:%c\n",requestToRead.gender);
 	requestToRead.state = ACEITE;
 	pthread_mutex_lock(&arraysReqSerMtx);
@@ -466,8 +469,11 @@ int main(int argc, char const *argv[]) {
 		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
 		if(n>0){
 			readI = 1;
+			pthread_mutex_lock(&arraysReqRecMtx);
+			incrementGender(requestToRead.gender, requestsReceived);
+			pthread_mutex_unlock(&arraysReqRecMtx);
 			printf("SAUNA MAIN: Received Request With Gender %c\n",requestToRead.gender);
-			if (requestToRead.gender == actualGender || actualGender == 'N'){
+			if (checkGender(requestToRead.gender)){
 				pthread_mutex_lock(&freeSeatsMutex);
 				while(freeSeats < 1){
 					pthread_cond_wait(&freeSeatsCond,&freeSeatsMutex);
