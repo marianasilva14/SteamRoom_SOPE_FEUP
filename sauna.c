@@ -40,7 +40,6 @@ pthread_cond_t  freeSeatsCond  = PTHREAD_COND_INITIALIZER;
 int freeSeats;
 int totalSeats;
 char actualGender = 'N'; //N means None
-int requestRejected = 0;
 int requestsReceived[2] = {0};// M-0, F-1
 int rejectionsReceived[2] = {0};
 int requestsServed[2] = {0};
@@ -357,9 +356,6 @@ void* handleRequest(void * args){
 
 	printf("Sauna: Handle Request, SEX:%c\n",requestToRead.gender);
 	requestToRead.state = ACEITE;
-	pthread_mutex_lock(&arraysReqSerMtx);
-	incrementGender(requestToRead.gender, requestsServed);
-	pthread_mutex_unlock(&arraysReqSerMtx);
 	restInSauna(&requestToRead);
 	pthread_mutex_lock(&freeSeatsMutex);
 	freeSeats++;
@@ -370,7 +366,7 @@ void* handleRequest(void * args){
 
 
 	actualGenderToDefault();
-	return NULL;
+	pthread_exit(0);
 }
 
 //------------------------------------------------------------------------------------------------------//
@@ -396,9 +392,6 @@ void createAndOpenFIFO_REQ(int* fifo_req){
 	printf("FIFO_entrada open\n");
 }
 
-//------------------------------------------------------------------------------------------------------//
-
-
 /**
  * Function to release all resources used
  *
@@ -412,7 +405,6 @@ void freeResources(){
 
 
 //------------------------------------------------------------------------------------------------------//
-
 
 /**
  * Function to process request readed and create a new thread that calls
@@ -428,6 +420,9 @@ void processRequest(Request* requestToRead)
 	pthread_t tid;
 	freeSeats--;
 	pthread_create(&tid, NULL, handleRequest, requestToRead);
+	pthread_mutex_lock(&arraysReqSerMtx);
+	incrementGender(requestToRead->gender, requestsServed);
+	pthread_mutex_unlock(&arraysReqSerMtx);
 }
 
 //------------------------------------------------------------------------------------------------------//
@@ -480,6 +475,8 @@ int main(int argc, char const *argv[]) {
 					}
 					processRequest(&requestToRead);
 					pthread_mutex_unlock(&freeSeatsMutex);
+
+
 				}
 				else{
 					printf("SAUNA MAIN, REJECTING REQUEST\n");
