@@ -173,6 +173,8 @@ void writeRequestInFifo(int fifo_req,Request *request){
   printf("Generating Request\n");
   remainingRequests--;
   request->state = PEDIDO;
+  printf("Nome FIFO REJEITADOS = %s\n",request->fifo_name);
+  printf("Gender do PEDIDO = %c\n",request->gender);
   write(fifo_req, request, sizeof(*request));
 }
 

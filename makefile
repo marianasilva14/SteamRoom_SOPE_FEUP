@@ -1,5 +1,5 @@
 saunamake: sauna.c gerador.c
-	gcc sauna.c -lpthread -lrt -Wall -o sauna
-	gcc gerador.c -lpthread -Wall -o gerador
+	gcc sauna.c -g -lpthread -lrt -Wall -o sauna
+	gcc gerador.c -g -lpthread -Wall -o gerador
 clean:
 	$(RM) gerador sauna

@@ -3,7 +3,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <semaphore.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <stdlib.h>
@@ -34,20 +33,12 @@ typedef struct{
 } Request;
 
 /**
-* Structure that wraps a request and the thread responsible for it.
-*/
-typedef struct{
-	Request request;
-	int threadID;
-} RequestWrapper;
-
-
-/**
  * Global variables
  */
+pthread_mutex_t freeSeatsMutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  freeSeatsCond  = PTHREAD_COND_INITIALIZER;
+int freeSeats;
 int totalSeats;
-char SEM_NAME[] = "/sem1";
-sem_t *sem;
 char actualGender = 'N'; //N means None
 int requestRejected = 0;
 int requestsReceived[2] = {0};// M-0, F-1
@@ -60,7 +51,6 @@ pthread_mutex_t arraysReqRecMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t arraysReqSerMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t fifoMtx = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t writeFileMtx = PTHREAD_MUTEX_INITIALIZER;
-int *threadsAvailable;
 FILE *logFile;
 pid_t pid;
 int numberOfFIFOs = 10;
@@ -205,8 +195,11 @@ void incrementGender(char gender, int * arrayOfGender){
 	if (gender == 'M'){
 		arrayOfGender[0]++;
 	}
-	else{
+	else if (gender == 'F'){
 		arrayOfGender[1]++;
+	}
+	else{
+		printf("WARNING,GENDER IS INCORRECT\n");
 	}
 }
 
@@ -234,16 +227,13 @@ void rejectRequest(Request* requestToRead){
  * Function to set actualGender to default value if sauna is empty
  */
 void actualGenderToDefault(){
-	int semValue;
-	if (sem_getvalue(sem, &semValue) == -1){
-		perror("Error Reading Semaphore Value\n");
-		exit(2);
-	}
-	if (semValue == totalSeats){
-		pthread_mutex_lock(&genderMtx);
-		actualGender = 'N';
-		pthread_mutex_unlock(&genderMtx);
-	}
+		pthread_mutex_lock(&freeSeatsMutex);
+		if (freeSeats == totalSeats){
+			pthread_mutex_lock(&genderMtx);
+			actualGender = 'N';
+			pthread_mutex_unlock(&genderMtx);
+		}
+		pthread_mutex_unlock(&freeSeatsMutex);
 }
 
 
@@ -256,16 +246,14 @@ void actualGenderToDefault(){
  *
  * @param fifo_name name of FIFO to try open
  * @param fifo_ans is the fifo if it was opened correctly
- * @param threadID ID of thread to set as available
  */
-int open_FIFO(char* fifo_name, int *fifo_ans, int threadID){
+int open_FIFO(char* fifo_name, int *fifo_ans){
 	int numTries = 0;
 	while ((*fifo_ans = open(fifo_name,O_WRONLY))==-1){
 		numTries++;
 		printf("Sauna: Error opening fifo awnser, try number %d\n",numTries);
 		sleep(1);
 		if (numTries > 4){
-			threadsAvailable[threadID] = 1;
 			return -1;
 		}
 	}
@@ -291,18 +279,15 @@ int getIndexOfFifo(char *fifo_name){
  * and after send the response
  *
  * @param requestToRead request already processed and ready to be sent to gerador
- * @param threadID ID of thread needed for open_FIFO
  */
-void sendResponse(Request requestToRead, int threadID){
+void sendResponse(Request requestToRead){
 
-	pthread_mutex_lock(&fifoMtx);
+	printf("Fifo Rejeitados from current request = %s\n",requestToRead.fifo_name);
 	int current_fifo = getIndexOfFifo(requestToRead.fifo_name);
 	if (current_fifo == -1){
 		printf("New Fifo Ans Detected, Opening it\n");
-		if(open_FIFO(requestToRead.fifo_name, &current_fifo,threadID)==-1){
+		if(open_FIFO(requestToRead.fifo_name, &current_fifo)==-1){
 			perror("Opening FIFO");
-			pthread_mutex_unlock(&fifoMtx);
-			sem_post(sem);
 			exit(2);
 		}
 		strcpy(namesOfFifos[FIFOS_ITER],requestToRead.fifo_name);
@@ -311,16 +296,11 @@ void sendResponse(Request requestToRead, int threadID){
 	else{
 		current_fifo = fifo_array[current_fifo];
 	}
-
 	printf("writing into fifo_ans\n");
 	if (write(current_fifo, &requestToRead, sizeof(requestToRead)) == -1){
 		perror("Writing Awnser Error");
-		pthread_mutex_unlock(&fifoMtx);
-		sem_post(sem);
 		exit(2);
 	}
-
-	pthread_mutex_unlock(&fifoMtx);
 	printf("Sent info back to generator\n");
 }
 
@@ -334,16 +314,19 @@ void sendResponse(Request requestToRead, int threadID){
  * because this way it is more reallistic.
  *
  */
-void restInSauna(Request requestToRead, struct timeval* tvBegin){
-	struct timeval tvEnd, tvDiff;
-  	int elapsedMiliseconds = 0;
-		printf("Resting in Sauna, SEX:%c\n",requestToRead.gender);
+void restInSauna(Request *requestToRead){
+		struct timeval tvEnd, tvDiff;
+		struct timeval tvBegin;
+		gettimeofday(&tvBegin,NULL);
+		int elapsedMiliseconds;
+		printf("Going to sleep in Sauna %d ms\n", requestToRead->requestTime);
+		//usleep(requestToRead->requestTime*1000);
 		do{
 			gettimeofday(&tvEnd, NULL);
-			timeval_subtract(&tvDiff, &tvEnd, tvBegin);
+			timeval_subtract(&tvDiff, &tvEnd, &tvBegin);
 			elapsedMiliseconds = tvDiff.tv_sec * 1000 + tvDiff.tv_usec/1000.0;
-		} while(elapsedMiliseconds < requestToRead.requestTime);
-		printf("Rested in Sauna, SEX:%c\n",requestToRead.gender);
+		} while(elapsedMiliseconds < requestToRead->requestTime);
+		printf("Rested in Sauna, SEX:%c\n",requestToRead->gender);
 }
 
 //------------------------------------------------------------------------------------------------------//
@@ -357,93 +340,27 @@ void restInSauna(Request requestToRead, struct timeval* tvBegin){
  * @param args
  */
 void* handleRequest(void * args){
-	struct timeval tvBegin;
-	RequestWrapper requestWrapper = *(RequestWrapper*) args;
-	Request requestToRead = requestWrapper.request;
-	int threadID = requestWrapper.threadID;
+	Request requestToRead = *(Request*) args;
 
 	pthread_mutex_lock(&arraysReqRecMtx);
 	incrementGender(requestToRead.gender, requestsReceived);
 	pthread_mutex_unlock(&arraysReqRecMtx);
 
-	if (checkGender(requestToRead.gender)){
-		printf("Sauna: Accepting Request, SEX:%c\n",requestToRead.gender);
-		/*if (sem_wait(sem)==-1){
-			perror("sem_wait(sem)\n");
-			exit(2);
-		}*/
-		gettimeofday(&tvBegin, NULL);
-		requestToRead.state = ACEITE;
-		pthread_mutex_lock(&arraysReqSerMtx);
-		incrementGender(requestToRead.gender, requestsServed);
-		pthread_mutex_unlock(&arraysReqSerMtx);
-		restInSauna(requestToRead, &tvBegin);
-	}
-	else{
-		rejectRequest(&requestToRead);
-	}
-
+	printf("Sauna: Handle Request, SEX:%c\n",requestToRead.gender);
+	requestToRead.state = ACEITE;
+	pthread_mutex_lock(&arraysReqSerMtx);
+	incrementGender(requestToRead.gender, requestsServed);
+	pthread_mutex_unlock(&arraysReqSerMtx);
+	restInSauna(&requestToRead);
 	printRegistrationMessages(requestToRead);
-	sendResponse(requestToRead, threadID);
+	sendResponse(requestToRead);
 
-	printf("Thread %d is now available\n",threadID);
-	threadsAvailable[threadID] = 1;
-	sem_post(sem);
+	pthread_mutex_lock(&freeSeatsMutex);
+	freeSeats++;
+	pthread_cond_signal (&freeSeatsCond);
+	pthread_mutex_unlock(&freeSeatsMutex);
 	actualGenderToDefault();
 	return NULL;
-}
-
-//------------------------------------------------------------------------------------------------------//
-
-
-/**
-* Function to initialize the array threadsAvailable, which is used to know if
-* one thread is available to use
-*/
-
-void initAvailableThreads(int numThreads){
-	int i;
-	for (i=0; i <numThreads;i++){
-		threadsAvailable[i] = 1;
-	}
-}
-
-//------------------------------------------------------------------------------------------------------//
-
-
-/**
- *
- *@return Index of the next available thread, or -1 case there is no one available.
- */
-int findNextAvailableThread(int numThreads){
-	int i;
-	for (i=0; i<numThreads;i++){
-		if (threadsAvailable[i] == 1){
-			return i;
-		}
-	}
-	return -1;
-}
-
-//------------------------------------------------------------------------------------------------------//
-
-
-/**
- * Function to create and initialize semaphore to be used to synchronize threads
- */
-void createAndInitializeSem(){
-	//create & initialize semaphore
-	if ( (sem = sem_open(SEM_NAME,O_CREAT,0660,totalSeats)) == SEM_FAILED){
-		perror("Error opening Semaphore\n");
-		exit(2);
-	}
-	if (sem_init(sem,0,totalSeats)==-1){
-		perror("sem_init()\n");
-		exit(2);
-	}
-	int tempSemValue;
-	sem_getvalue(sem, &tempSemValue);
-	printf("Sem Value=%d\n",tempSemValue);
 }
 
 //------------------------------------------------------------------------------------------------------//
@@ -478,47 +395,11 @@ void createAndOpenFIFO_REQ(int* fifo_req){
  * @param requestThreads array of threads to be released
  * @param maxIdUsed number of threads on array
  */
-void freeResources(pthread_t *requestThreads, int* maxIdUsed){
-	int i = 0;
-	for (; i <= *maxIdUsed;i++){
-		printf("Joining thread %d\n",i);
-		pthread_join(requestThreads[i], NULL);
-		printf("Joined Thread %d\n",i);
-	}
-	printf("Freeing array of threads\n");
-	free(requestThreads);
-	printf("Freeing array of available threads\n");
-	free(threadsAvailable);
-	printf("Destroying Semaphore\n");
-	sem_destroy(sem);
-	printf("Semaphore Destroyed\n");
+void freeResources(){
 	unlink(fifo_entrada);
 	printf("Destryoed FIFO\n");
 }
 
-//------------------------------------------------------------------------------------------------------//
-
-
-/**
- * Function to realloc memory of the array of threads to double
- *
- * @param requestThreads array of threads to be realloced
- * @param numThreads size of array before realloc
- */
-void reallocMemory(pthread_t* requestThreads, int* numThreads){
-	printf("Going to Reallocate Memory\n");
-	int j = *numThreads;
-	*numThreads = *numThreads * 2;
-	if ( (requestThreads = realloc(requestThreads,*numThreads * sizeof(pthread_t))) == NULL){
-		perror("Error Reallocating Memory for threads\n");
-		exit(2);
-	}
-	threadsAvailable = realloc(threadsAvailable,*numThreads*sizeof(int));
-	for (; j < *numThreads;j++){
-		threadsAvailable[j] = 1;
-	}
-	printf("Memory Reallocated\n");
-}
 
 //------------------------------------------------------------------------------------------------------//
 
@@ -532,22 +413,11 @@ void reallocMemory(pthread_t* requestThreads, int* numThreads){
  * @param nextTheadAvailable id of one thread available to be used
  * @param maxIdUsed number to know what is the max number of threads used simultaneously
  */
-void processRequest(pthread_t *requestThreads,
-					Request* requestToRead,
-					int* nextThreadAvailable,
-					int* maxIdUsed)
+void processRequest(Request* requestToRead)
 {
-	printf("Process new request\n");
-	RequestWrapper requestWrapper;
-	requestWrapper.request = *requestToRead;
-	requestWrapper.threadID = *nextThreadAvailable;
-	pthread_t threadAvailable = requestThreads[*nextThreadAvailable];
-	pthread_create(&threadAvailable, NULL, handleRequest, &requestWrapper);
-	threadsAvailable[*nextThreadAvailable] = 0;
-	if (*nextThreadAvailable > *maxIdUsed){
-		*maxIdUsed = *nextThreadAvailable;
-	}
-	printf("Created thread %d\n", *nextThreadAvailable);
+	pthread_t tid;
+	freeSeats--;
+	pthread_create(&tid, NULL, handleRequest, requestToRead);
 }
 
 //------------------------------------------------------------------------------------------------------//
@@ -559,7 +429,7 @@ void processRequest(pthread_t *requestThreads,
  * because there is no space in the sauna or if the person inside the sauna is of the opposite sex.
  *
  * Main function:
- *  1) create and inizialize one semaphore to synchronize the threads of program
+ *  1)
  *  2) open one FIFO to receive request
  *  3) create a array of all threads to be used
  *  4) read request
@@ -577,16 +447,11 @@ int main(int argc, char const *argv[]) {
 	}
 	sscanf(argv[1], "%d", &totalSeats);
 	printf("Total Seats available = %d\n",totalSeats);
-	createAndInitializeSem();
+	freeSeats = totalSeats;
 	int fifo_req;
 	createAndOpenFIFO_REQ(&fifo_req);
 	openLogFile();
-	int numThreads = totalSeats;
-	pthread_t *requestThreads = malloc(sizeof(pthread_t)*numThreads * 100);
-	threadsAvailable = malloc(sizeof(int)*numThreads);
-	initAvailableThreads(numThreads);
 	printf("Allocated initial threads\n");
-	int maxIdUsed = -1;
 
 	Request requestToRead;
 	int n = 1;
@@ -595,16 +460,23 @@ int main(int argc, char const *argv[]) {
 		n=read(fifo_req,&requestToRead, sizeof(requestToRead));
 		if(n>0){
 			readI = 1;
-			if (sem_wait(sem)==-1){
-				perror("sem_wait(sem)\n");
-				exit(2);
+			printf("SAUNA MAIN: Received Request With Gender %c\n",requestToRead.gender);
+			printf("SAUNA MAIN: Received Request With FIFO %s\n",requestToRead.fifo_name);
+			if (requestToRead.gender == actualGender || actualGender == 'N'){
+				pthread_mutex_lock(&freeSeatsMutex);
+				while(freeSeats < 1){
+					pthread_cond_wait(&freeSeatsCond,&freeSeatsMutex);
+					}
+					processRequest(&requestToRead);
+					pthread_mutex_unlock(&freeSeatsMutex);
+				}
+				else{
+					printf("SAUNA MAIN, REJECTING REQUEST\n");
+				rejectRequest(&requestToRead);
+				printRegistrationMessages(requestToRead);
+				sendResponse(requestToRead);
 			}
-			int nextThreadAvailable = findNextAvailableThread(numThreads);
-			if (nextThreadAvailable == -1){
-				reallocMemory(requestThreads, &numThreads);
-				nextThreadAvailable = findNextAvailableThread(numThreads);
-			}
-			processRequest(requestThreads, &requestToRead, &nextThreadAvailable, &maxIdUsed);
+
 		}
 		else if(n==0 && readI){
 			printf("Do you want to exit? (Y/N)\n");
@@ -618,7 +490,7 @@ int main(int argc, char const *argv[]) {
 		}
 	}
 
-	freeResources(requestThreads, &maxIdUsed);
+	freeResources();
 	printStatus();
 	return 0;
 }
