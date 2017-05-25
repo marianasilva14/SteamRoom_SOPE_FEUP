@@ -248,15 +248,18 @@ void actualGenderToDefault(){
  * @param fifo_ans is the fifo if it was opened correctly
  */
 int open_FIFO(char* fifo_name, int *fifo_ans){
+
 	int numTries = 0;
+	printf("Opening Fifo\n");
 	while ((*fifo_ans = open(fifo_name,O_WRONLY))==-1){
 		numTries++;
-		printf("Sauna: Error opening fifo awnser, try number %d\n",numTries);
 		sleep(1);
+		printf("Sauna: Error opening fifo awnser, try number %d\n",numTries);
 		if (numTries > 4){
 			return -1;
 		}
 	}
+	printf("FIFO opened with no error\n");
 	return 0;
 }
 
@@ -284,18 +287,21 @@ void sendResponse(Request requestToRead){
 
 	printf("Fifo Rejeitados from current request = %s\n",requestToRead.fifo_name);
 	int current_fifo = getIndexOfFifo(requestToRead.fifo_name);
+	pthread_mutex_lock(&fifoMtx);
 	if (current_fifo == -1){
 		printf("New Fifo Ans Detected, Opening it\n");
 		if(open_FIFO(requestToRead.fifo_name, &current_fifo)==-1){
 			perror("Opening FIFO");
 			exit(2);
 		}
+		printf("Opened FIFO with sucess\n");
 		strcpy(namesOfFifos[FIFOS_ITER],requestToRead.fifo_name);
 		fifo_array[FIFOS_ITER++] = current_fifo;
 	}
 	else{
 		current_fifo = fifo_array[current_fifo];
 	}
+	pthread_mutex_unlock(&fifoMtx);
 	printf("writing into fifo_ans\n");
 	if (write(current_fifo, &requestToRead, sizeof(requestToRead)) == -1){
 		perror("Writing Awnser Error");
@@ -352,13 +358,14 @@ void* handleRequest(void * args){
 	incrementGender(requestToRead.gender, requestsServed);
 	pthread_mutex_unlock(&arraysReqSerMtx);
 	restInSauna(&requestToRead);
-	printRegistrationMessages(requestToRead);
-	sendResponse(requestToRead);
-
 	pthread_mutex_lock(&freeSeatsMutex);
 	freeSeats++;
 	pthread_cond_signal (&freeSeatsCond);
 	pthread_mutex_unlock(&freeSeatsMutex);
+	printRegistrationMessages(requestToRead);
+	sendResponse(requestToRead);
+
+
 	actualGenderToDefault();
 	return NULL;
 }
@@ -451,7 +458,6 @@ int main(int argc, char const *argv[]) {
 	int fifo_req;
 	createAndOpenFIFO_REQ(&fifo_req);
 	openLogFile();
-	printf("Allocated initial threads\n");
 
 	Request requestToRead;
 	int n = 1;
@@ -461,7 +467,6 @@ int main(int argc, char const *argv[]) {
 		if(n>0){
 			readI = 1;
 			printf("SAUNA MAIN: Received Request With Gender %c\n",requestToRead.gender);
-			printf("SAUNA MAIN: Received Request With FIFO %s\n",requestToRead.fifo_name);
 			if (requestToRead.gender == actualGender || actualGender == 'N'){
 				pthread_mutex_lock(&freeSeatsMutex);
 				while(freeSeats < 1){
@@ -472,9 +477,9 @@ int main(int argc, char const *argv[]) {
 				}
 				else{
 					printf("SAUNA MAIN, REJECTING REQUEST\n");
-				rejectRequest(&requestToRead);
-				printRegistrationMessages(requestToRead);
-				sendResponse(requestToRead);
+					rejectRequest(&requestToRead);
+					printRegistrationMessages(requestToRead);
+					sendResponse(requestToRead);
 			}
 
 		}
